@@ -1,0 +1,27 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "https://ex.org/fhir/Patient/123",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "123"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "o2",
+        "subject": {
+          "reference": "Patient/123"
+        },
+        "performer": [
+          {
+            "reference": "https://ex.org/fhir/Patient/123"
+          }
+        ]
+      }
+    }
+  ]
+}
