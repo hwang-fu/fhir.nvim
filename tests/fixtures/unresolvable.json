@@ -1,0 +1,7 @@
+{
+  "resourceType": "Observation",
+  "id": "o4",
+  "subject": {
+    "reference": "Patient/does-not-exist"
+  }
+}
