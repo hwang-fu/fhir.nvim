@@ -15,4 +15,19 @@ function M.notify(msg, level)
   vim.notify("fhir: " .. msg, level or vim.log.levels.INFO)
 end
 
+-- Present `items` (each with a `.label`) in a picker; call on_choice(item) on a
+-- pick, no-op on cancel. Wraps vim.ui.select (richer adapters can layer on later).
+function M.select(items, opts, on_choice)
+  vim.ui.select(items, {
+    prompt = opts.prompt,
+    format_item = function(item)
+      return item.label
+    end,
+  }, function(choice)
+    if choice then
+      on_choice(choice)
+    end
+  end)
+end
+
 return M

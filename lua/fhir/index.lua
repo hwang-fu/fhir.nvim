@@ -1,4 +1,5 @@
 local parse = require("fhir.parse")
+local resolver = require("fhir.resolver")
 
 local M = {}
 
@@ -83,7 +84,7 @@ local function index_resource(obj, full_url, bufnr, idx)
 end
 
 local function empty_index(bufnr)
-  return { bufnr = bufnr, resources = {}, by_identity = {}, references = {} }
+  return { bufnr = bufnr, resources = {}, by_identity = {}, references = {}, reverse = {} }
 end
 
 local function build(bufnr)
@@ -102,6 +103,17 @@ local function build(bufnr)
   else
     index_resource(root, nil, bufnr, idx)
   end
+
+  -- Reverse pass: now that by_identity is complete, map each resolved target
+  -- resource to the occurrences that reference it (powers find-usages).
+  for _, occ in ipairs(idx.references) do
+    local res = resolver.resolve_resource(occ, idx)
+    if res then
+      idx.reverse[res] = idx.reverse[res] or {}
+      table.insert(idx.reverse[res], occ)
+    end
+  end
+
   return idx
 end
 

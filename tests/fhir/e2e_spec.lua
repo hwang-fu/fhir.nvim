@@ -22,3 +22,28 @@ describe("end-to-end go-to-reference", function()
     assert.is_not_nil(vim.api.nvim_get_commands({}).FhirEnable)
   end)
 end)
+
+describe("end-to-end find-usages", function()
+  it("setup + attach + :FhirUsages jumps to a referencing location", function()
+    require("fhir").setup({})
+    local buf = h.fixture_buf("bundle_urn.json")
+    vim.api.nvim_win_set_buf(0, buf)
+    require("fhir.detect").attach(buf)
+
+    local patient = require("fhir.index").get(buf).by_identity["Patient/p1"]
+    vim.api.nvim_win_set_cursor(0, { patient.location.range[1] + 1, patient.location.range[2] + 1 })
+
+    local orig = vim.ui.select
+    vim.ui.select = function(list, _, cb)
+      cb(list[1])
+    end
+    vim.cmd("FhirUsages")
+    vim.ui.select = orig
+
+    local occ = require("fhir.index").get(buf).reverse[patient][1]
+    assert.are.same(
+      { occ.location.range[1] + 1, occ.location.range[2] },
+      vim.api.nvim_win_get_cursor(0)
+    )
+  end)
+end)
