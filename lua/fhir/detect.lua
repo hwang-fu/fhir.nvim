@@ -21,6 +21,9 @@ function M.attach(bufnr)
   vim.api.nvim_buf_create_user_command(bufnr, "FhirGoto", function()
     require("fhir.features.goto").run()
   end, { desc = "Go to the FHIR reference under the cursor" })
+  vim.api.nvim_buf_create_user_command(bufnr, "FhirUsages", function()
+    require("fhir.features.usages").run()
+  end, { desc = "List references to the FHIR resource under the cursor" })
   vim.api.nvim_buf_create_user_command(bufnr, "FhirDisable", function()
     M.detach(bufnr)
   end, { desc = "Disable fhir.nvim for this buffer" })
@@ -30,16 +33,27 @@ function M.attach(bufnr)
       require("fhir.features.goto").run()
     end, { buffer = bufnr, desc = "fhir: go to reference" })
   end
+  local usages_key = config.get().keymaps.find_usages
+  if usages_key then
+    vim.keymap.set("n", usages_key, function()
+      require("fhir.features.usages").run()
+    end, { buffer = bufnr, desc = "fhir: find usages" })
+  end
 end
 
 -- Tear down: remove commands/keymaps, clear state, drop the cached index.
 function M.detach(bufnr)
   vim.b[bufnr].fhir_attached = nil
   pcall(vim.api.nvim_buf_del_user_command, bufnr, "FhirGoto")
+  pcall(vim.api.nvim_buf_del_user_command, bufnr, "FhirUsages")
   pcall(vim.api.nvim_buf_del_user_command, bufnr, "FhirDisable")
   local goto_key = config.get().keymaps.goto_reference
   if goto_key then
     pcall(vim.keymap.del, "n", goto_key, { buffer = bufnr })
+  end
+  local usages_key = config.get().keymaps.find_usages
+  if usages_key then
+    pcall(vim.keymap.del, "n", usages_key, { buffer = bufnr })
   end
   require("fhir.index").clear(bufnr)
 end
