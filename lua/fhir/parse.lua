@@ -1,9 +1,9 @@
 local M = {}
 
 -- Decode a `string` node into its unescaped Lua string value, or nil.
--- Decision 2 forbids decoding the whole document; unescaping a single scalar
--- string via vim.json.decode is idiomatic and fine.
-local function decode_string(node, bufnr)
+-- Decoding the whole document is forbidden (Decision 2); unescaping a single
+-- scalar string via vim.json.decode is idiomatic and fine.
+function M.node_string(node, bufnr)
   if not node or node:type() ~= "string" then
     return nil
   end
@@ -34,7 +34,7 @@ function M.value_node(obj, key, bufnr)
     return nil
   end
   for child in obj:iter_children() do
-    if child:type() == "pair" and decode_string(child:field("key")[1], bufnr) == key then
+    if child:type() == "pair" and M.node_string(child:field("key")[1], bufnr) == key then
       return child:field("value")[1]
     end
   end
@@ -43,7 +43,7 @@ end
 
 -- The unescaped string value for `key`, or nil if absent / not a string.
 function M.string_value(obj, key, bufnr)
-  return decode_string(M.value_node(obj, key, bufnr), bufnr)
+  return M.node_string(M.value_node(obj, key, bufnr), bufnr)
 end
 
 -- Iterator over the named element nodes of an array node.
