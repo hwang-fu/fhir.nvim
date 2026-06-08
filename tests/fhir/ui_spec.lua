@@ -21,3 +21,37 @@ describe("ui.notify", function()
     end)
   end)
 end)
+
+describe("ui.select", function()
+  it("formats items and routes the choice to on_choice", function()
+    local items = { { label = "first" }, { label = "second" } }
+    local seen_labels = {}
+    local orig = vim.ui.select
+    vim.ui.select = function(list, opts, cb)
+      for _, it in ipairs(list) do
+        seen_labels[#seen_labels + 1] = opts.format_item(it)
+      end
+      cb(list[2]) -- user picks the second
+    end
+    local chosen
+    ui.select(items, { prompt = "Usages" }, function(it)
+      chosen = it
+    end)
+    vim.ui.select = orig
+    assert.are.same({ "first", "second" }, seen_labels)
+    assert.are.equal("second", chosen.label)
+  end)
+
+  it("does nothing when the user cancels", function()
+    local orig = vim.ui.select
+    vim.ui.select = function(_, _, cb)
+      cb(nil)
+    end
+    local called = false
+    ui.select({ { label = "x" } }, {}, function()
+      called = true
+    end)
+    vim.ui.select = orig
+    assert.is_false(called)
+  end)
+end)
