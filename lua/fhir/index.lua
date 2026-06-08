@@ -121,4 +121,14 @@ function M.get(bufnr)
   return idx
 end
 
+-- Return the cached index for `bufnr` without building it, or nil.
+function M.peek(bufnr)
+  return cache[bufnr]
+end
+
+-- Drop the cached index for `bufnr` (e.g. on save or teardown).
+function M.clear(bufnr)
+  cache[bufnr] = nil
+end
+
 return M
