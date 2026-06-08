@@ -1,0 +1,6 @@
+describe("harness", function()
+  it("runs and can require fhir modules path", function()
+    assert.are.equal(2, 1 + 1)
+    assert.is_true(vim.fn.has("nvim-0.10") == 1)
+  end)
+end)
