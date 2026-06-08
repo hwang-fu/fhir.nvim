@@ -36,6 +36,7 @@ function M.run()
       return
     end
   end
+  ui.notify("no reference under the cursor", vim.log.levels.INFO)
 end
 
 return M
