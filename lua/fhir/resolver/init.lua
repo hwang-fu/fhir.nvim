@@ -8,4 +8,8 @@ function M.resolve(occ, idx)
   return active.resolve(occ, idx)
 end
 
+function M.resolve_resource(occ, idx)
+  return active.resolve_resource(occ, idx)
+end
+
 return M
