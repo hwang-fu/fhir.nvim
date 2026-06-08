@@ -19,4 +19,9 @@ function M.goto_reference()
   require("fhir.features.goto").run()
 end
 
+-- Public API: list references to the resource under the cursor.
+function M.find_usages()
+  require("fhir.features.usages").run()
+end
+
 return M
