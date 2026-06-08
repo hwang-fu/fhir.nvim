@@ -34,14 +34,20 @@ describe("goto", function()
     assert.are.same(before, vim.api.nvim_win_get_cursor(0))
   end)
 
-  it("is a quiet no-op when the cursor is not on a reference", function()
+  it("notifies and does not move when the cursor is not on a reference", function()
     local buf = h.fixture_buf("bundle_urn.json")
     vim.api.nvim_win_set_buf(0, buf)
     vim.api.nvim_win_set_cursor(0, { 1, 0 }) -- not on a reference
     local before = vim.api.nvim_win_get_cursor(0)
-    assert.has_no.errors(function()
-      goto_ref.run()
-    end)
+    local msg
+    local orig = vim.notify
+    vim.notify = function(m)
+      msg = m
+    end
+    pcall(goto_ref.run)
+    vim.notify = orig
     assert.are.same(before, vim.api.nvim_win_get_cursor(0))
+    assert.is_not_nil(msg)
+    assert.is_not_nil(msg:match("no reference"))
   end)
 end)
