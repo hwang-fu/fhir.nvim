@@ -53,3 +53,21 @@ describe("index", function()
     assert.are_not.equal(a, index.get(buf))
   end)
 end)
+
+describe("index reverse map", function()
+  it("maps a resource to the occurrences that reference it", function()
+    local idx = index.get(h.fixture_buf("bundle_urn.json"))
+    local patient = idx.by_identity["Patient/p1"]
+    local usages = idx.reverse[patient]
+    assert.is_not_nil(usages)
+    assert.are.equal(1, #usages)
+    assert.are.equal("Observation", usages[1].owner.resource_type)
+    assert.is_table(usages[1].location.range)
+  end)
+
+  it("leaves unreferenced resources out of the reverse map", function()
+    local idx = index.get(h.fixture_buf("bundle_urn.json"))
+    local obs = idx.by_identity["Observation/o1"]
+    assert.is_nil(idx.reverse[obs])
+  end)
+end)
