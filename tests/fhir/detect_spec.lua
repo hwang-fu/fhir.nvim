@@ -1,0 +1,26 @@
+local h = require("tests.helpers")
+local detect = require("fhir.detect")
+
+describe("detect", function()
+  it("recognizes a top-level resourceType as FHIR", function()
+    assert.is_true(detect.is_fhir(h.fixture_buf("bundle_urn.json")))
+    assert.is_false(detect.is_fhir(h.buf('{ "foo": "bar" }')))
+  end)
+
+  it("attach sets buffer-local state and a buffer-local :FhirGoto command", function()
+    local buf = h.fixture_buf("contained.json")
+    detect.attach(buf)
+    assert.is_true(vim.b[buf].fhir_attached == true)
+    local cmds = vim.api.nvim_buf_get_commands(buf, {})
+    assert.is_not_nil(cmds.FhirGoto)
+  end)
+
+  it("detach tears down state and clears the index cache", function()
+    local buf = h.fixture_buf("contained.json")
+    detect.attach(buf)
+    require("fhir.index").get(buf) -- populate the cache
+    detect.detach(buf)
+    assert.is_nil(vim.b[buf].fhir_attached)
+    assert.is_nil(require("fhir.index").peek(buf))
+  end)
+end)

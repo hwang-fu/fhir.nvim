@@ -1,0 +1,34 @@
+{
+  "resourceType": "Bundle",
+  "type": "transaction",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:p1",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "p1",
+        "name": [
+          {
+            "family": "Doe",
+            "given": [
+              "Jane"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:o1",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "o1",
+        "code": {
+          "text": "Heart rate"
+        },
+        "subject": {
+          "reference": "urn:uuid:p1"
+        }
+      }
+    }
+  ]
+}
