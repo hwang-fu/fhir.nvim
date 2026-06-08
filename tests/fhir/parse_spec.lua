@@ -36,3 +36,18 @@ describe("parse", function()
     assert.are.equal(2, n)
   end)
 end)
+
+describe("parse.node_string", function()
+  it("decodes a string node to its unescaped value", function()
+    local buf = h.buf('{ "a": "x\\ny", "n": 3 }')
+    local root = parse.root(buf)
+    assert.are.equal("x\ny", parse.node_string(parse.value_node(root, "a", buf), buf))
+  end)
+
+  it("returns nil for nil or non-string nodes", function()
+    local buf = h.buf('{ "n": 3 }')
+    local root = parse.root(buf)
+    assert.is_nil(parse.node_string(nil, buf))
+    assert.is_nil(parse.node_string(parse.value_node(root, "n", buf), buf)) -- a number node
+  end)
+end)
