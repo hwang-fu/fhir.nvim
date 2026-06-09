@@ -9,7 +9,11 @@ use crate::ast::{BinOp, Expr, Literal, TypeOp};
 use crate::error::Error;
 use crate::value::{Value, from_json, matches_type};
 
-pub fn eval(expr: &Expr, focus: &[Value]) -> Result<Vec<Value>, Error> {
+pub(crate) struct Ctx<'a> {
+    pub resolver: Option<&'a dyn crate::Resolve>,
+}
+
+pub fn eval(expr: &Expr, focus: &[Value], ctx: &Ctx) -> Result<Vec<Value>, Error> {
     match expr {
         Expr::Literal(lit) => Ok(vec![literal_value(lit)]),
         Expr::This => Ok(focus.to_vec()),
@@ -28,12 +32,12 @@ pub fn eval(expr: &Expr, focus: &[Value]) -> Result<Vec<Value>, Error> {
             Ok(out)
         }
         Expr::Member { base, name } => {
-            let base = eval(base, focus)?;
+            let base = eval(base, focus, ctx)?;
             Ok(base.iter().flat_map(|item| access(item, name)).collect())
         }
         Expr::Index { base, index } => {
-            let items = eval(base, focus)?;
-            let idx = eval(index, focus)?;
+            let items = eval(base, focus, ctx)?;
+            let idx = eval(index, focus, ctx)?;
             let n = match idx.as_slice() {
                 [Value::Integer(n)] => *n,
                 other => {
@@ -48,24 +52,24 @@ pub fn eval(expr: &Expr, focus: &[Value]) -> Result<Vec<Value>, Error> {
             Ok(items.into_iter().nth(n as usize).into_iter().collect())
         }
         Expr::Binary { op, lhs, rhs } => {
-            let lhs = eval(lhs, focus)?;
-            let rhs = eval(rhs, focus)?;
+            let lhs = eval(lhs, focus, ctx)?;
+            let rhs = eval(rhs, focus, ctx)?;
             binary(*op, lhs, rhs)
         }
         Expr::Call { base, name, args } => {
             // a method call's input is its base; a bare call's input is the focus
             let input = match base {
-                Some(b) => eval(b, focus)?,
+                Some(b) => eval(b, focus, ctx)?,
                 None => focus.to_vec(),
             };
-            crate::functions::call(name, &input, args, focus)
+            crate::functions::call(name, &input, args, focus, ctx)
         }
         Expr::TypeTest {
             op,
             expr,
             type_name,
         } => {
-            let operand = eval(expr, focus)?;
+            let operand = eval(expr, focus, ctx)?;
             match op {
                 TypeOp::Is => match singleton(&operand)? {
                     None => Ok(vec![]),
