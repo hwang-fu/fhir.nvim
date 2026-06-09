@@ -13,12 +13,12 @@ pub fn eval(expr: &Expr, focus: &[Value], root: &[Value]) -> Result<Vec<Value>, 
             let mut out = Vec::new();
             for item in focus {
                 // a head matching the resource type selects the resource itself
-                if let Value::Complex { ty: Some(t), .. } = item {
-                    if t == name {
-                        out.push(item.clone());
-                        continue;
-                    }
-                }
+                if let Value::Complex { ty: Some(t), .. } = item
+                    && t == name
+                {
+                    out.push(item.clone());
+                    continue;
+                };
                 out.extend(access(item, name));
             }
             Ok(out)
@@ -70,10 +70,13 @@ pub(crate) fn access(item: &Value, name: &str) -> Vec<Value> {
     // FHIR choice elements: a miss on `value` may be stored as `valueQuantity`,
     // `valueDate`, ... - the suffix names the type
     for (key, child) in data {
-        if let Some(suffix) = key.strip_prefix(name) {
-            if suffix.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
-                return tag_choice(from_json(child), suffix);
-            }
+        if let Some(suffix) = key.strip_prefix(name)
+            && suffix
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_uppercase())
+        {
+            return tag_choice(from_json(child), suffix);
         }
     }
     vec![]
