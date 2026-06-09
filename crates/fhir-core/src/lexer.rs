@@ -1,7 +1,6 @@
 use crate::error::Error;
 use rust_decimal::Decimal;
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Ident(String),
@@ -35,7 +34,6 @@ pub enum Token {
     Minus,
 }
 
-#[allow(dead_code)]
 fn keyword(word: &str) -> Option<Token> {
     match word {
         "true" => Some(Token::True),
@@ -49,7 +47,6 @@ fn keyword(word: &str) -> Option<Token> {
     }
 }
 
-#[allow(dead_code)]
 pub fn tokenize(input: &str) -> Result<Vec<Token>, Error> {
     let mut tokens = Vec::new();
     let mut chars = input.chars().peekable();
