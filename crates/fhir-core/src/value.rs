@@ -1,5 +1,3 @@
-#![allow(dead_code)] // not yet wired into the public API
-
 use rust_decimal::Decimal;
 
 #[derive(Debug, Clone)]
