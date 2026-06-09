@@ -79,11 +79,35 @@ See `:help fhir` for the full reference.
 - Resolves relative, absolute-URL, `urn:uuid:`, and `contained` references. References by `identifier` and conditional references are **not** resolved.
 - Resolution is **single-buffer**; cross-file and live-server resolution are future work.
 
+## FHIRPath engine (in development)
+
+The `crates/` workspace contains **`fhir-core`**, a standalone Rust FHIRPath
+interpreter - hand-written lexer and Pratt parser, tree-walking evaluator over
+a JSON model with exact decimals - that will power in-editor FHIRPath
+evaluation. It is not wired into the editor yet.
+
+Honesty over checklists: the engine is measured against the **official
+FHIRPath test suite** (vendored under `crates/fhir-core/tests/conformance/`)
+on every pull request, with a ratcheting pass-rate floor. Current rate:
+**26% (248/935)**.
+
+Covered so far: path navigation and indexing; boolean/string/integer/decimal/
+date/dateTime literals; equality and comparison with empty propagation;
+three-valued `and`/`or`/`not()`; `in`, `|` (union), `&` (concat); `exists`,
+`empty`, `count`, `all`, `distinct`; `where`, `select`, `ofType` (handles
+polymorphic `value[x]`); `first`/`last`/`single`/`tail`/`skip`/`take`;
+`is`/`as`; `extension(url)`; `resolve()` via a pluggable resolver trait.
+
+Not covered yet (the bulk of the gap to 100%): arithmetic operators,
+string/math/conversion functions, type reflection, `%variables`, and
+strict choice-element typing rules.
+
 ## Roadmap
 
-v1 (this release) is navigation, in pure Lua. Planned, not yet built:
+v1 is navigation, in pure Lua. In progress or planned:
 
-- **FHIRPath evaluation** in the editor, powered by a standalone, conformance-tested **Rust** engine.
+- **FHIRPath evaluation** in the editor - the Rust engine above, exposed
+  through a native module with graceful degradation when it is absent.
 - **Validation & diagnostics** against R4 structure rules and constraints.
 
 ## Development
@@ -91,6 +115,9 @@ v1 (this release) is navigation, in pure Lua. Planned, not yet built:
 ```sh
 make test   # plenary specs (clones plenary into .tests/ on first run)
 make lint   # stylua + luacheck
+
+cargo test -p fhir-core                 # engine unit + conformance tests
+cargo clippy -p fhir-core -- -D warnings
 ```
 
 ## License
