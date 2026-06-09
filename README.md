@@ -14,22 +14,13 @@ FHIR JSON is verbose, deeply nested, and reference-heavy. `fhir.nvim` treats a F
 
 Put the cursor on a `reference` value and jump to the resource it points at — relative (`Patient/123`), absolute URL, `urn:uuid:…`, or `contained` (`#id`). Jumplist-aware, so `<C-o>` brings you back.
 
-<!-- record demo → docs/media/goto.gif -->
-![Go to reference](docs/media/goto.gif)
-
 ### Find usages
 
 On a resource, list everything that references it — the inverse of go-to-reference.
 
-<!-- record demo → docs/media/usages.gif -->
-![Find usages](docs/media/usages.gif)
-
 ### Outline
 
 A searchable list of every resource in the document, each with a human-readable label like `[Observation] Heart rate (id)`.
-
-<!-- record demo → docs/media/outline.gif -->
-![Outline](docs/media/outline.gif)
 
 ## Requirements
 
