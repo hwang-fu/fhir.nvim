@@ -38,7 +38,45 @@ pub fn call(name: &str, input: &[Value], args: &[Expr]) -> Result<Vec<Value>, Er
             Some(b) => ok_bool(!b),
             None => Ok(vec![]),
         },
+        ("where", [criteria]) => {
+            let mut out = Vec::new();
+            for item in input {
+                if criterion(criteria, item)? {
+                    out.push(item.clone());
+                }
+            }
+            Ok(out)
+        }
+        ("select", [projection]) => {
+            let mut out = Vec::new();
+            for item in input {
+                out.extend(eval::eval(projection, std::slice::from_ref(item))?);
+            }
+            Ok(out)
+        }
+        ("ofType", [type_arg]) => {
+            let ty = type_name_of(type_arg)
+                .ok_or_else(|| Error::Eval("ofType expects a type name".into()))?;
+            Ok(input
+                .iter()
+                .filter(|v| crate::value::matches_type(v, &ty))
+                .cloned()
+                .collect())
+        }
         _ => Err(Error::Eval(format!("unknown function: {name}"))),
+    }
+}
+
+// a type argument is a name, not an expression to evaluate: `string`,
+// `Quantity`, or qualified `System.String` (parsed as member access)
+fn type_name_of(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::Identifier(s) => Some(s.clone()),
+        Expr::Member { base, name } => match base.as_ref() {
+            Expr::Identifier(b) => Some(format!("{b}.{name}")),
+            _ => None,
+        },
+        _ => None,
     }
 }
 
