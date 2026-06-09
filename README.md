@@ -4,7 +4,7 @@
 [![Neovim](https://img.shields.io/badge/Neovim-0.10%2B-blueviolet?logo=neovim&logoColor=white)](https://neovim.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
-> Navigate and comprehend **FHIR R4 JSON** the way you navigate a codebase — jump between resources, follow references, and outline a document, without leaving your editor.
+> Navigate and comprehend **FHIR R4 JSON** the way you navigate a codebase - jump between resources, follow references, and outline a document, without leaving your editor.
 
 FHIR JSON is verbose, deeply nested, and reference-heavy. `fhir.nvim` treats a FHIR document like a small codebase: jump from a reference to the resource it points at, find everything that points back, and browse a navigable outline of what's in the file. It's offline-first, works on a single buffer, and needs zero configuration.
 
@@ -12,11 +12,11 @@ FHIR JSON is verbose, deeply nested, and reference-heavy. `fhir.nvim` treats a F
 
 ### Go to reference
 
-Put the cursor on a `reference` value and jump to the resource it points at — relative (`Patient/123`), absolute URL, `urn:uuid:…`, or `contained` (`#id`). Jumplist-aware, so `<C-o>` brings you back.
+Put the cursor on a `reference` value and jump to the resource it points at - relative (`Patient/123`), absolute URL, `urn:uuid:...`, or `contained` (`#id`). Jumplist-aware, so `<C-o>` brings you back.
 
 ### Find usages
 
-On a resource, list everything that references it — the inverse of go-to-reference.
+On a resource, list everything that references it - the inverse of go-to-reference.
 
 ### Outline
 
@@ -24,8 +24,8 @@ A searchable list of every resource in the document, each with a human-readable 
 
 ## Requirements
 
-- Neovim **≥ 0.10**
-- The `json` Treesitter parser (a soft dependency) — `:TSInstall json` via [nvim-treesitter]. `:checkhealth fhir` reports whether it's present.
+- Neovim **>= 0.10**
+- The `json` Treesitter parser (a soft dependency) - `:TSInstall json` via [nvim-treesitter]. `:checkhealth fhir` reports whether it's present.
 - Optional: [dressing.nvim] or [telescope-ui-select] give `vim.ui.select` a fuzzy picker (used by the outline and find-usages lists).
 
 ## Installation
@@ -39,7 +39,7 @@ With [lazy.nvim]:
 }
 ```
 
-`opts = {}` calls `setup()` for you. Other plugin managers are analogous. v1 is pure Lua — no build step.
+`opts = {}` calls `setup()` for you. Other plugin managers are analogous. v1 is pure Lua - no build step.
 
 ## Usage
 
