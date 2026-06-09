@@ -1,4 +1,4 @@
-#![allow(dead_code)] // consumed by eval in a later task
+#![allow(dead_code)] // not yet wired into the public API
 
 use crate::ast::{Expr, Literal};
 use crate::error::Error;
@@ -45,7 +45,6 @@ impl Parser {
     }
 
     fn parse_expr(&mut self, _min_bp: u8) -> Result<Expr, Error> {
-        // the Pratt operator loop wraps this in the operator task
         self.parse_postfix()
     }
 
