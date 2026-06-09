@@ -1,0 +1,149 @@
+*fhir.txt*              Navigate and comprehend FHIR R4 JSON like a codebase
+
+==============================================================================
+CONTENTS                                                  *fhir* *fhir.nvim*
+
+  1. Introduction ............................. |fhir-introduction|
+  2. Requirements ............................. |fhir-requirements|
+  3. Installation ............................. |fhir-installation|
+  4. Setup & configuration .................... |fhir-configuration|
+  5. Commands ................................. |fhir-commands|
+  6. Features ................................. |fhir-features|
+  7. Health ................................... |fhir-health|
+  8. Limitations .............................. |fhir-limitations|
+
+==============================================================================
+1. Introduction                                          *fhir-introduction*
+
+fhir.nvim lets you navigate FHIR R4 JSON the way you navigate a codebase:
+jump from a `reference` to the resource it points at, find everything that
+references a resource, and browse a searchable outline of the document —
+without leaving your editor.
+
+It is offline-first, works on a single buffer, and needs zero configuration.
+All state is buffer-local; the plugin attaches no global mappings and never
+throws on malformed input.
+
+==============================================================================
+2. Requirements                                          *fhir-requirements*
+
+- Neovim >= 0.10
+- The `json` Treesitter parser. This is a soft dependency used for
+  position-aware parsing; install it via nvim-treesitter (`:TSInstall json`).
+  |:checkhealth| reports whether it is present.
+- Optional: `dressing.nvim` or `telescope-ui-select` give |vim.ui.select| a
+  fuzzy picker, which the outline and find-usages lists use.
+
+==============================================================================
+3. Installation                                          *fhir-installation*
+
+With lazy.nvim: >lua
+    {
+      "hwang-fu/fhir.nvim",
+      opts = {},
+    }
+<
+`opts = {}` makes lazy.nvim call |fhir.setup()| for you. Other plugin managers
+are analogous — install the plugin and call `require("fhir").setup()`.
+
+v1 is pure Lua and needs no build step.
+
+==============================================================================
+4. Setup & configuration                                 *fhir-configuration*
+
+                                                                *fhir.setup()*
+Call `setup()` once, optionally with a table of options: >lua
+    require("fhir").setup({
+      detection = "auto",
+      keymaps = {},
+    })
+<
+Options ~
+
+                                                            *fhir-opt-detection*
+detection                       string (default "auto")
+        How buffers are attached.
+          "auto"    Auto-attach `.json` / `.fhir.json` buffers whose
+                    top-level object has a `resourceType` field.
+          "manual"  Never auto-attach; use |:FhirEnable| per buffer.
+
+                                                            *fhir-opt-keymaps*
+keymaps                         table (default {})
+        Opt-in, buffer-local normal-mode mappings. None are set by default,
+        so the plugin never clobbers your keys. Recognized entries:
+          goto_reference   mapping for |:FhirGoto|
+          find_usages      mapping for |:FhirUsages|
+          outline          mapping for |:FhirOutline|
+
+        Example (a suggestion, not a default): >lua
+            require("fhir").setup({
+              keymaps = {
+                goto_reference = "gd",
+                find_usages    = "gr",
+                outline        = "<leader>fo",
+              },
+            })
+<
+==============================================================================
+5. Commands                                                  *fhir-commands*
+
+The feature commands are buffer-local: they exist only in attached buffers.
+
+:FhirGoto                                                        *:FhirGoto*
+        Jump to the resource referenced by the `reference` value under the
+        cursor, pushing the |jumplist| so |CTRL-O| returns. If the reference
+        cannot be resolved within the buffer, a quiet notice is shown.
+
+:FhirUsages                                                      *:FhirUsages*
+        List every reference to the resource under the cursor in a picker;
+        select one to jump to it.
+
+:FhirOutline                                                     *:FhirOutline*
+        Show a picker of every resource in the buffer, each with a
+        human-readable label; select one to jump to it.
+
+:FhirEnable                                                      *:FhirEnable*
+        Attach fhir.nvim to the current buffer. Useful when `detection` is
+        "manual", or for a buffer auto-detection skipped. This is a global
+        command.
+
+:FhirDisable                                                     *:FhirDisable*
+        Detach fhir.nvim from the current buffer: remove its commands,
+        mappings, and cached index.
+
+==============================================================================
+6. Features                                                  *fhir-features*
+
+Go-to-reference ~
+        With the cursor on a `reference` string value, |:FhirGoto| resolves
+        it and jumps to the target. Reference flavors handled:
+          - relative ............ `Patient/123`
+          - absolute URL ........ `https://example.org/fhir/Patient/123`
+          - `urn:uuid:...` ...... matched against an entry's `fullUrl`
+          - contained ........... `#localId`, within the resource's
+                                  `contained[]`
+
+Find-usages ~
+        |:FhirUsages| lists everything that references the resource under the
+        cursor — the inverse of go-to-reference.
+
+Outline ~
+        |:FhirOutline| lists every resource in the document, labeled by a
+        heuristic (`code.text`, then `code.coding[].display`, then a formatted
+        `name`, falling back to `Type/id`).
+
+==============================================================================
+7. Health                                                      *fhir-health*
+
+Run |:checkhealth| `fhir` to verify the Neovim version, the `json` Treesitter
+parser, and the picker.
+
+==============================================================================
+8. Limitations                                            *fhir-limitations*
+
+- Target is FHIR R4 (`4.0.1`).
+- References by `identifier` and conditional references are not resolved.
+- Resolution is single-buffer; cross-file (workspace) and live-server
+  resolution are planned for later milestones.
+
+vim:tw=78:ts=8:et:ft=help:norl:
