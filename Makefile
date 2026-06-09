@@ -11,7 +11,11 @@ SCRATCH      := .tests
 PLENARY      := $(SCRATCH)/plenary.nvim
 PLENARY_URL  := https://github.com/nvim-lua/plenary.nvim
 
-.PHONY: all test lint clean
+CARGO        ?= cargo
+CDYLIB       := target/release/libfhir_core.so
+NATIVE       := $(SCRATCH)/fhir_core.so
+
+.PHONY: all test lint clean build
 
 all: lint test
 
@@ -24,6 +28,11 @@ test: $(PLENARY)
 lint:
 	$(STYLUA) --check $(LUA_SRC) $(LUA_TEST)
 	$(LUACHECK) $(LUA_SRC)
+
+build:
+	$(CARGO) build --release
+	mkdir -p $(SCRATCH)
+	cp $(CDYLIB) $(NATIVE)
 
 clean:
 	rm -rf $(SCRATCH)

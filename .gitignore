@@ -43,3 +43,6 @@ luac.out
 
 # Generated vimdoc tags (plugin managers regenerate these)
 doc/tags
+
+# Rust / cargo build output
+/target
