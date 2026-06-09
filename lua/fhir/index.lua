@@ -62,6 +62,7 @@ local function index_resource(obj, full_url, bufnr, idx)
     id = parse.string_value(obj, "id", bufnr),
     full_url = full_url,
     location = location(obj, bufnr),
+    node = obj,
     contained = {},
   }
   idx.resources[#idx.resources + 1] = res

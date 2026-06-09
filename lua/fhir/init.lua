@@ -24,4 +24,9 @@ function M.find_usages()
   require("fhir.features.usages").run()
 end
 
+-- Public API: pick a resource from the buffer's outline and jump to it.
+function M.outline()
+  require("fhir.features.outline").run()
+end
+
 return M

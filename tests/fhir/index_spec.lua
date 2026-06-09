@@ -71,3 +71,12 @@ describe("index reverse map", function()
     assert.is_nil(idx.reverse[obs])
   end)
 end)
+
+describe("index resource node", function()
+  it("stores each resource's object node", function()
+    local idx = index.get(h.fixture_buf("bundle_urn.json"))
+    local patient = idx.by_identity["Patient/p1"]
+    assert.is_not_nil(patient.node)
+    assert.are.equal("object", patient.node:type())
+  end)
+end)

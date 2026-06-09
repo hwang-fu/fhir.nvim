@@ -47,3 +47,25 @@ describe("end-to-end find-usages", function()
     )
   end)
 end)
+
+describe("end-to-end outline", function()
+  it("setup + attach + :FhirOutline jumps to the chosen resource", function()
+    require("fhir").setup({})
+    local buf = h.fixture_buf("bundle_urn.json")
+    vim.api.nvim_win_set_buf(0, buf)
+    require("fhir.detect").attach(buf)
+
+    local orig = vim.ui.select
+    vim.ui.select = function(list, _, cb)
+      cb(list[2]) -- the Observation
+    end
+    vim.cmd("FhirOutline")
+    vim.ui.select = orig
+
+    local obs = require("fhir.index").get(buf).by_identity["Observation/o1"]
+    assert.are.same(
+      { obs.location.range[1] + 1, obs.location.range[2] },
+      vim.api.nvim_win_get_cursor(0)
+    )
+  end)
+end)
