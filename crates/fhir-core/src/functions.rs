@@ -3,7 +3,12 @@ use crate::error::Error;
 use crate::eval;
 use crate::value::Value;
 
-pub fn call(name: &str, input: &[Value], args: &[Expr]) -> Result<Vec<Value>, Error> {
+pub fn call(
+    name: &str,
+    input: &[Value],
+    args: &[Expr],
+    focus: &[Value],
+) -> Result<Vec<Value>, Error> {
     match (name, args) {
         ("exists", []) => ok_bool(!input.is_empty()),
         ("exists", [criteria]) => {
@@ -63,7 +68,41 @@ pub fn call(name: &str, input: &[Value], args: &[Expr]) -> Result<Vec<Value>, Er
                 .cloned()
                 .collect())
         }
+        ("first", []) => Ok(input.first().cloned().into_iter().collect()),
+        ("last", []) => Ok(input.last().cloned().into_iter().collect()),
+        ("tail", []) => Ok(input.iter().skip(1).cloned().collect()),
+        ("skip", [n]) => {
+            let n = int_arg(n, focus)?;
+            if n <= 0 {
+                return Ok(input.to_vec());
+            }
+            Ok(input.iter().skip(n as usize).cloned().collect())
+        }
+        ("take", [n]) => {
+            let n = int_arg(n, focus)?;
+            if n <= 0 {
+                return Ok(vec![]);
+            }
+            Ok(input.iter().take(n as usize).cloned().collect())
+        }
+        ("single", []) => match input {
+            [] => Ok(vec![]),
+            [v] => Ok(vec![v.clone()]),
+            _ => Err(Error::Eval(
+                "single() on a collection with more than one value".into(),
+            )),
+        },
         _ => Err(Error::Eval(format!("unknown function: {name}"))),
+    }
+}
+
+// a plain argument is evaluated once, in the context the function is invoked from
+fn int_arg(expr: &Expr, focus: &[Value]) -> Result<i64, Error> {
+    match eval::eval(expr, focus)?.as_slice() {
+        [Value::Integer(n)] => Ok(*n),
+        other => Err(Error::Eval(format!(
+            "expected a single integer argument, got {other:?}"
+        ))),
     }
 }
 
