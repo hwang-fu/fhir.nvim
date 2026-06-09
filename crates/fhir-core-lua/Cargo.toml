@@ -1,0 +1,12 @@
+[package]
+name = "fhir-core-lua"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "fhir_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+fhir-core = { version = "0.1.0", path = "../fhir-core" }
+mlua = { version = "0.11.6", features = ["luajit", "module"] }
