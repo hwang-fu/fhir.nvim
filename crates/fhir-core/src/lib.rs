@@ -163,4 +163,42 @@ mod tests {
             Value::String("x".into())
         );
     }
+
+    #[test]
+    fn existence_functions() {
+        assert_eq!(ev1(PATIENT, "name.exists()"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "nothing.exists()"), Value::Boolean(false));
+        assert_eq!(
+            ev1(PATIENT, "name.exists(use = 'usual')"),
+            Value::Boolean(true)
+        );
+        assert_eq!(
+            ev1(PATIENT, "name.exists(use = 'x')"),
+            Value::Boolean(false)
+        );
+        assert_eq!(ev1(PATIENT, "name.empty()"), Value::Boolean(false));
+        assert_eq!(ev1(PATIENT, "nothing.empty()"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "name.given.count()"), Value::Integer(3));
+        assert_eq!(ev1(PATIENT, "nothing.count()"), Value::Integer(0));
+        assert_eq!(
+            ev1(PATIENT, "(name.given | name.given).distinct().count()"),
+            Value::Integer(3)
+        );
+        assert_eq!(
+            ev1(PATIENT, "name.all(given.exists())"),
+            Value::Boolean(true)
+        );
+        assert_eq!(
+            ev1(PATIENT, "name.all(use = 'official')"),
+            Value::Boolean(false)
+        );
+        // all() on empty input is vacuously true
+        assert_eq!(ev1(PATIENT, "nothing.all(use = 'x')"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "(1 = 2).not()"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "nothing.exists().not()"), Value::Boolean(true));
+        assert!(matches!(
+            evaluate(PATIENT, "name.unknownFn()"),
+            Err(Error::Eval(_))
+        ));
+    }
 }
