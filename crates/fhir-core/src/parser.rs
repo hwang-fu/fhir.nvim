@@ -1,5 +1,3 @@
-#![allow(dead_code)] // not yet wired into the public API
-
 use crate::ast::{BinOp, Expr, Literal, TypeOp};
 use crate::error::Error;
 use crate::lexer::{Token, tokenize};
