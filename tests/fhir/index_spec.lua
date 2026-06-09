@@ -39,7 +39,7 @@ describe("index", function()
     assert.is_not_nil(owner.contained["pr1"])
   end)
 
-  it("never throws on malformed JSON — returns an empty-ish index", function()
+  it("never throws on malformed JSON - returns an empty-ish index", function()
     local ok, idx = pcall(index.get, h.fixture_buf("malformed.json"))
     assert.is_true(ok)
     assert.is_table(idx.references)

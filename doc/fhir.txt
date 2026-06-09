@@ -17,7 +17,7 @@ CONTENTS                                                  *fhir* *fhir.nvim*
 
 fhir.nvim lets you navigate FHIR R4 JSON the way you navigate a codebase:
 jump from a `reference` to the resource it points at, find everything that
-references a resource, and browse a searchable outline of the document —
+references a resource, and browse a searchable outline of the document -
 without leaving your editor.
 
 It is offline-first, works on a single buffer, and needs zero configuration.
@@ -44,7 +44,7 @@ With lazy.nvim: >lua
     }
 <
 `opts = {}` makes lazy.nvim call |fhir.setup()| for you. Other plugin managers
-are analogous — install the plugin and call `require("fhir").setup()`.
+are analogous - install the plugin and call `require("fhir").setup()`.
 
 v1 is pure Lua and needs no build step.
 
@@ -125,7 +125,7 @@ Go-to-reference ~
 
 Find-usages ~
         |:FhirUsages| lists everything that references the resource under the
-        cursor — the inverse of go-to-reference.
+        cursor - the inverse of go-to-reference.
 
 Outline ~
         |:FhirOutline| lists every resource in the document, labeled by a
