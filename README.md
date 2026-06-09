@@ -87,9 +87,12 @@ a JSON model with exact decimals - that will power in-editor FHIRPath
 evaluation. It is not wired into the editor yet.
 
 Honesty over checklists: the engine is measured against the **official
-FHIRPath test suite** (vendored under `crates/fhir-core/tests/conformance/`)
-on every pull request, with a ratcheting pass-rate floor. Current rate:
-**26% (248/935)**.
+FHIRPath conformance suite** (vendored under
+`crates/fhir-core/tests/conformance/`) on every pull request, with a
+ratcheting pass-rate floor. *Conformance* means how faithfully an
+implementation matches the behavior the spec requires; the suite - 935
+input/expression/expected-output cases published with the spec - turns that
+into a measurable score. Current rate: **26% (248/935)**.
 
 Covered so far: path navigation and indexing; boolean/string/integer/decimal/
 date/dateTime literals; equality and comparison with empty propagation;

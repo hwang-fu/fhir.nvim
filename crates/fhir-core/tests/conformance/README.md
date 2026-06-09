@@ -1,5 +1,10 @@
 # FHIRPath conformance suite (vendored)
 
+Conformance is how faithfully an implementation matches the behavior the
+FHIRPath specification requires. This suite is the spec's own test set -
+each case is an input resource, an expression, and the required output -
+so running it yields a measurable conformance score.
+
 - `tests-fhir-r4.xml`: the official FHIRPath test suite for FHIR R4, from the
   FHIR test-cases repository.
   - Source: https://raw.githubusercontent.com/FHIR/fhir-test-cases/master/r4/fhirpath/tests-fhir-r4.xml
