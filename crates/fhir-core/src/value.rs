@@ -50,12 +50,32 @@ pub(crate) fn matches_type(v: &Value, name: &str) -> bool {
         Value::Boolean(_) => eq("boolean"),
         Value::Integer(_) => eq("integer"),
         Value::Decimal(_) => eq("decimal"),
-        Value::String(_) => eq("string") || eq("code") || eq("uri") || eq("id"),
+        Value::String(s) => {
+            eq("string")
+                || eq("code")
+                || eq("uri")
+                || eq("id")
+                || (eq("date") && looks_like_date(s))
+                || (eq("dateTime") && looks_like_datetime(s))
+        }
         Value::Date(_) => eq("date"),
         Value::DateTime(_) => eq("dateTime"),
         Value::Complex { ty: Some(t), .. } => name.eq_ignore_ascii_case(t),
         Value::Complex { ty: None, .. } => false,
     }
+}
+
+// YYYY, YYYY-MM, or YYYY-MM-DD
+fn looks_like_date(s: &str) -> bool {
+    matches!(s.len(), 4 | 7 | 10)
+        && s.bytes().enumerate().all(|(i, b)| match i {
+            4 | 7 => b == b'-',
+            _ => b.is_ascii_digit(),
+        })
+}
+
+fn looks_like_datetime(s: &str) -> bool {
+    s.len() > 10 && looks_like_date(&s[..10]) && s.as_bytes()[10] == b'T'
 }
 
 impl PartialEq for Value {
