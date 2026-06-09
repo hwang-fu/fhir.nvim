@@ -201,4 +201,46 @@ mod tests {
             Err(Error::Eval(_))
         ));
     }
+
+    #[test]
+    fn filtering_and_projection() {
+        assert_eq!(
+            strings(&ev(PATIENT, "name.where(use = 'official').family")),
+            ["Chalmers"]
+        );
+        assert!(ev(PATIENT, "name.where(use = 'nope')").is_empty());
+        assert_eq!(
+            ev1(PATIENT, "name.where(given.exists()).count()"),
+            Value::Integer(2)
+        );
+        assert_eq!(
+            strings(&ev(PATIENT, "name.select(given)")),
+            ["Peter", "James", "Jim"]
+        );
+        assert_eq!(
+            ev1(PATIENT, "name.given.select($this).count()"),
+            Value::Integer(3)
+        );
+    }
+
+    #[test]
+    fn of_type_filters_by_type() {
+        assert_eq!(
+            strings(&ev(OBS, "Observation.value.ofType(Quantity).unit")),
+            ["lbs"]
+        );
+        assert!(ev(OBS, "Observation.value.ofType(string)").is_empty());
+        assert_eq!(
+            ev1(PATIENT, "name.given.ofType(string).count()"),
+            Value::Integer(3)
+        );
+        assert_eq!(
+            ev1(PATIENT, "name.given.ofType(System.String).count()"),
+            Value::Integer(3)
+        );
+        assert_eq!(
+            ev1(PATIENT, "name.given.ofType(integer).count()"),
+            Value::Integer(0)
+        );
+    }
 }
