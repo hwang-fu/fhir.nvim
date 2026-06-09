@@ -41,6 +41,23 @@ pub fn from_json(v: &serde_json::Value) -> Vec<Value> {
     }
 }
 
+// `System.`-qualified and FHIR type names match case-insensitively; JSON cannot
+// distinguish FHIR string flavors, so code/uri/id are accepted as strings
+pub(crate) fn matches_type(v: &Value, name: &str) -> bool {
+    let name = name.strip_prefix("System.").unwrap_or(name);
+    let eq = |t: &str| name.eq_ignore_ascii_case(t);
+    match v {
+        Value::Boolean(_) => eq("boolean"),
+        Value::Integer(_) => eq("integer"),
+        Value::Decimal(_) => eq("decimal"),
+        Value::String(_) => eq("string") || eq("code") || eq("uri") || eq("id"),
+        Value::Date(_) => eq("date"),
+        Value::DateTime(_) => eq("dateTime"),
+        Value::Complex { ty: Some(t), .. } => name.eq_ignore_ascii_case(t),
+        Value::Complex { ty: None, .. } => false,
+    }
+}
+
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
