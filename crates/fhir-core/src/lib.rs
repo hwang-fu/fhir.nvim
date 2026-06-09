@@ -10,11 +10,40 @@ pub use error::Error;
 pub use value::Value;
 
 pub fn evaluate(resource_json: &str, expression: &str) -> Result<Vec<Value>, Error> {
-    let json: serde_json::Value =
-        serde_json::from_str(resource_json).map_err(|e| Error::Eval(format!("bad json: {e}")))?;
-    let expr = parser::parse(expression)?;
-    let input = value::from_json(&json);
-    eval::eval(&expr, &input)
+    Engine::new().evaluate(resource_json, expression)
+}
+
+/// Resolves a FHIR reference (e.g. "Patient/p1") to a resource. How references
+/// are looked up is the caller's concern; the engine only asks.
+pub trait Resolve {
+    fn resolve(&self, reference: &str) -> Option<serde_json::Value>;
+}
+
+#[derive(Default)]
+pub struct Engine {
+    resolver: Option<Box<dyn Resolve>>,
+}
+
+impl Engine {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_resolver(mut self, resolver: Box<dyn Resolve>) -> Self {
+        self.resolver = Some(resolver);
+        self
+    }
+
+    pub fn evaluate(&self, resource_json: &str, expression: &str) -> Result<Vec<Value>, Error> {
+        let json: serde_json::Value = serde_json::from_str(resource_json)
+            .map_err(|e| Error::Eval(format!("bad json: {e}")))?;
+        let expr = parser::parse(expression)?;
+        let input = value::from_json(&json);
+        let ctx = eval::Ctx {
+            resolver: self.resolver.as_deref(),
+        };
+        eval::eval(&expr, &input, &ctx)
+    }
 }
 
 pub fn ping() -> &'static str {
@@ -290,5 +319,45 @@ mod tests {
         assert_eq!(ev1(PATIENT, "birthDate is date"), Value::Boolean(true));
         // is on empty -> empty
         assert!(ev(PATIENT, "nothing is string").is_empty());
+    }
+
+    const EXT_PATIENT: &str = r#"{
+      "resourceType": "Patient", "id": "p2",
+      "extension": [
+        { "url": "http://example.org/bday", "valueDate": "1970-01-01" },
+        { "url": "http://example.org/other", "valueString": "x" }
+      ]
+    }"#;
+
+    #[test]
+    fn extension_by_url() {
+        assert_eq!(
+            ev1(
+                EXT_PATIENT,
+                "extension('http://example.org/bday').value = @1970-01-01"
+            ),
+            Value::Boolean(true)
+        );
+        assert_eq!(
+            ev1(EXT_PATIENT, "extension('http://nope').count()"),
+            Value::Integer(0)
+        );
+    }
+
+    struct FakeResolver;
+
+    impl Resolve for FakeResolver {
+        fn resolve(&self, reference: &str) -> Option<serde_json::Value> {
+            (reference == "Patient/p1").then(|| serde_json::from_str(PATIENT).unwrap())
+        }
+    }
+
+    #[test]
+    fn resolve_uses_the_engine_hook() {
+        // default engine: resolve() yields empty
+        assert!(ev(OBS, "subject.resolve()").is_empty());
+        let engine = Engine::new().with_resolver(Box::new(FakeResolver));
+        let got = engine.evaluate(OBS, "subject.resolve().id").unwrap();
+        assert_eq!(got, [Value::String("p1".into())]);
     }
 }
