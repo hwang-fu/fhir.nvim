@@ -1,19 +1,20 @@
 use crate::ast::Expr;
 use crate::error::Error;
-use crate::eval;
-use crate::value::Value;
+use crate::eval::{self, Ctx};
+use crate::value::{Value, from_json};
 
 pub fn call(
     name: &str,
     input: &[Value],
     args: &[Expr],
     focus: &[Value],
+    ctx: &Ctx,
 ) -> Result<Vec<Value>, Error> {
     match (name, args) {
         ("exists", []) => ok_bool(!input.is_empty()),
         ("exists", [criteria]) => {
             for item in input {
-                if criterion(criteria, item)? {
+                if criterion(criteria, item, ctx)? {
                     return ok_bool(true);
                 }
             }
@@ -33,7 +34,7 @@ pub fn call(
         // all() on empty input is vacuously true
         ("all", [criteria]) => {
             for item in input {
-                if !criterion(criteria, item)? {
+                if !criterion(criteria, item, ctx)? {
                     return ok_bool(false);
                 }
             }
@@ -46,7 +47,7 @@ pub fn call(
         ("where", [criteria]) => {
             let mut out = Vec::new();
             for item in input {
-                if criterion(criteria, item)? {
+                if criterion(criteria, item, ctx)? {
                     out.push(item.clone());
                 }
             }
@@ -55,7 +56,7 @@ pub fn call(
         ("select", [projection]) => {
             let mut out = Vec::new();
             for item in input {
-                out.extend(eval::eval(projection, std::slice::from_ref(item))?);
+                out.extend(eval::eval(projection, std::slice::from_ref(item), ctx)?);
             }
             Ok(out)
         }
@@ -72,18 +73,51 @@ pub fn call(
         ("last", []) => Ok(input.last().cloned().into_iter().collect()),
         ("tail", []) => Ok(input.iter().skip(1).cloned().collect()),
         ("skip", [n]) => {
-            let n = int_arg(n, focus)?;
+            let n = int_arg(n, focus, ctx)?;
             if n <= 0 {
                 return Ok(input.to_vec());
             }
             Ok(input.iter().skip(n as usize).cloned().collect())
         }
         ("take", [n]) => {
-            let n = int_arg(n, focus)?;
+            let n = int_arg(n, focus, ctx)?;
             if n <= 0 {
                 return Ok(vec![]);
             }
             Ok(input.iter().take(n as usize).cloned().collect())
+        }
+        ("extension", [url_arg]) => {
+            let url = string_arg(url_arg, focus, ctx)?;
+            let mut out = Vec::new();
+            for item in input {
+                for ext in eval::access(item, "extension") {
+                    if let Value::Complex { data, .. } = &ext
+                        && data.get("url").and_then(|u| u.as_str()) == Some(url.as_str())
+                    {
+                        out.push(ext.clone());
+                    }
+                }
+            }
+            Ok(out)
+        }
+        ("resolve", []) => {
+            let mut out = Vec::new();
+            for item in input {
+                let reference = match item {
+                    Value::String(s) => Some(s.clone()),
+                    Value::Complex { data, .. } => data
+                        .get("reference")
+                        .and_then(|r| r.as_str())
+                        .map(String::from),
+                    _ => None,
+                };
+                if let (Some(r), Some(resolver)) = (reference, ctx.resolver)
+                    && let Some(resource) = resolver.resolve(&r)
+                {
+                    out.extend(from_json(&resource));
+                }
+            }
+            Ok(out)
         }
         ("single", []) => match input {
             [] => Ok(vec![]),
@@ -97,11 +131,20 @@ pub fn call(
 }
 
 // a plain argument is evaluated once, in the context the function is invoked from
-fn int_arg(expr: &Expr, focus: &[Value]) -> Result<i64, Error> {
-    match eval::eval(expr, focus)?.as_slice() {
+fn int_arg(expr: &Expr, focus: &[Value], ctx: &Ctx) -> Result<i64, Error> {
+    match eval::eval(expr, focus, ctx)?.as_slice() {
         [Value::Integer(n)] => Ok(*n),
         other => Err(Error::Eval(format!(
             "expected a single integer argument, got {other:?}"
+        ))),
+    }
+}
+
+fn string_arg(expr: &Expr, focus: &[Value], ctx: &Ctx) -> Result<String, Error> {
+    match eval::eval(expr, focus, ctx)?.as_slice() {
+        [Value::String(s)] => Ok(s.clone()),
+        other => Err(Error::Eval(format!(
+            "expected a single string argument, got {other:?}"
         ))),
     }
 }
@@ -125,7 +168,7 @@ fn ok_bool(b: bool) -> Result<Vec<Value>, Error> {
 
 // a criteria argument is evaluated per item, with that item as the focus;
 // an empty or false result both mean the criteria does not hold
-fn criterion(expr: &Expr, item: &Value) -> Result<bool, Error> {
-    let result = eval::eval(expr, std::slice::from_ref(item))?;
+fn criterion(expr: &Expr, item: &Value, ctx: &Ctx) -> Result<bool, Error> {
+    let result = eval::eval(expr, std::slice::from_ref(item), ctx)?;
     Ok(eval::boolean_of(&result)?.unwrap_or(false))
 }
