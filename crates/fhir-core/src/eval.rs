@@ -1,7 +1,11 @@
 //! Tree-walking evaluator for parsed FHIRPath expressions. It only navigates
 //! JSON-derived values; nothing is compiled or executed.
 
-use crate::ast::{Expr, Literal};
+use std::cmp::Ordering;
+
+use rust_decimal::Decimal;
+
+use crate::ast::{BinOp, Expr, Literal};
 use crate::error::Error;
 use crate::value::{Value, from_json};
 
@@ -43,10 +47,119 @@ pub fn eval(expr: &Expr, focus: &[Value]) -> Result<Vec<Value>, Error> {
             }
             Ok(items.into_iter().nth(n as usize).into_iter().collect())
         }
-        Expr::Call { .. } | Expr::Binary { .. } | Expr::TypeTest { .. } => {
-            Err(Error::Eval("not implemented".into()))
+        Expr::Binary { op, lhs, rhs } => {
+            let lhs = eval(lhs, focus)?;
+            let rhs = eval(rhs, focus)?;
+            binary(*op, lhs, rhs)
         }
+        Expr::Call { .. } | Expr::TypeTest { .. } => Err(Error::Eval("not implemented".into())),
     }
+}
+
+fn binary(op: BinOp, lhs: Vec<Value>, rhs: Vec<Value>) -> Result<Vec<Value>, Error> {
+    let result = match op {
+        // equality on empty is empty, not false: missing data is unknown, not unequal
+        BinOp::Eq | BinOp::Ne => {
+            if lhs.is_empty() || rhs.is_empty() {
+                return Ok(vec![]);
+            }
+            let equal = lhs.len() == rhs.len() && lhs.iter().zip(&rhs).all(|(a, b)| a == b);
+            Value::Boolean(if op == BinOp::Eq { equal } else { !equal })
+        }
+        BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
+            let (Some(a), Some(b)) = (singleton(&lhs)?, singleton(&rhs)?) else {
+                return Ok(vec![]);
+            };
+            let ord = compare(a, b)?;
+            Value::Boolean(match op {
+                BinOp::Lt => ord == Ordering::Less,
+                BinOp::Le => ord != Ordering::Greater,
+                BinOp::Gt => ord == Ordering::Greater,
+                _ => ord != Ordering::Less,
+            })
+        }
+        // three-valued logic: an empty operand is "unknown", not false
+        BinOp::And | BinOp::Or => {
+            let a = boolean_of(&lhs)?;
+            let b = boolean_of(&rhs)?;
+            let known = match (op, a, b) {
+                (BinOp::And, Some(false), _) | (BinOp::And, _, Some(false)) => Some(false),
+                (BinOp::And, Some(true), Some(true)) => Some(true),
+                (BinOp::Or, Some(true), _) | (BinOp::Or, _, Some(true)) => Some(true),
+                (BinOp::Or, Some(false), Some(false)) => Some(false),
+                _ => None,
+            };
+            match known {
+                Some(b) => Value::Boolean(b),
+                None => return Ok(vec![]),
+            }
+        }
+        BinOp::In => {
+            let Some(a) = singleton(&lhs)? else {
+                return Ok(vec![]);
+            };
+            Value::Boolean(rhs.contains(a))
+        }
+        // union is a set merge: duplicates collapse
+        BinOp::Union => {
+            let mut out: Vec<Value> = Vec::new();
+            for v in lhs.into_iter().chain(rhs) {
+                if !out.contains(&v) {
+                    out.push(v);
+                }
+            }
+            return Ok(out);
+        }
+        BinOp::Concat => {
+            let mut s = concat_operand(&lhs)?;
+            s.push_str(&concat_operand(&rhs)?);
+            Value::String(s)
+        }
+    };
+    Ok(vec![result])
+}
+
+// concat treats an empty operand as the empty string
+fn concat_operand(vals: &[Value]) -> Result<String, Error> {
+    match singleton(vals)? {
+        None => Ok(String::new()),
+        Some(Value::String(s)) => Ok(s.clone()),
+        Some(other) => Err(Error::Eval(format!("expected a string, got {other:?}"))),
+    }
+}
+
+fn singleton(vals: &[Value]) -> Result<Option<&Value>, Error> {
+    match vals {
+        [] => Ok(None),
+        [v] => Ok(Some(v)),
+        _ => Err(Error::Eval("expected a single value".into())),
+    }
+}
+
+pub(crate) fn boolean_of(vals: &[Value]) -> Result<Option<bool>, Error> {
+    match singleton(vals)? {
+        None => Ok(None),
+        Some(Value::Boolean(b)) => Ok(Some(*b)),
+        Some(other) => Err(Error::Eval(format!("expected a boolean, got {other:?}"))),
+    }
+}
+
+fn compare(a: &Value, b: &Value) -> Result<Ordering, Error> {
+    let ord = match (a, b) {
+        (Value::Integer(x), Value::Integer(y)) => x.cmp(y),
+        (Value::Decimal(x), Value::Decimal(y)) => x.cmp(y),
+        (Value::Integer(x), Value::Decimal(y)) => Decimal::from(*x).cmp(y),
+        (Value::Decimal(x), Value::Integer(y)) => x.cmp(&Decimal::from(*y)),
+        (Value::String(x), Value::String(y))
+        | (Value::Date(x), Value::Date(y))
+        | (Value::DateTime(x), Value::DateTime(y))
+        | (Value::Date(x), Value::String(y))
+        | (Value::String(x), Value::Date(y))
+        | (Value::DateTime(x), Value::String(y))
+        | (Value::String(x), Value::DateTime(y)) => x.cmp(y),
+        _ => return Err(Error::Eval(format!("cannot compare {a:?} and {b:?}"))),
+    };
+    Ok(ord)
 }
 
 fn literal_value(lit: &Literal) -> Value {
