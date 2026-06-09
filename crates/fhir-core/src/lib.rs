@@ -102,4 +102,65 @@ mod tests {
             other => panic!("expected Complex, got {other:?}"),
         }
     }
+
+    fn ev1(json: &str, expr: &str) -> Value {
+        let mut r = ev(json, expr);
+        assert_eq!(r.len(), 1, "expected singleton from {expr}");
+        r.remove(0)
+    }
+
+    #[test]
+    fn equality_and_comparison() {
+        assert_eq!(ev1(PATIENT, "active = true"), Value::Boolean(true));
+        assert_eq!(
+            ev1(PATIENT, "name[0].family = 'Chalmers'"),
+            Value::Boolean(true)
+        );
+        assert_eq!(ev1(PATIENT, "name[0].family != 'X'"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "1 < 2"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "2 <= 2"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "'abc' > 'abd'"), Value::Boolean(false));
+        assert_eq!(
+            ev1(PATIENT, "birthDate = @1974-12-25"),
+            Value::Boolean(true)
+        );
+        // empty operand propagates to empty
+        assert!(ev(PATIENT, "name[9].family = 'x'").is_empty());
+        // non-singleton comparison is an error
+        assert!(matches!(
+            evaluate(PATIENT, "name.given < 'x'"),
+            Err(Error::Eval(_))
+        ));
+    }
+
+    #[test]
+    fn logic_three_valued() {
+        assert_eq!(ev1(PATIENT, "(1 = 1) and (2 = 2)"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "(1 = 2) or (2 = 2)"), Value::Boolean(true));
+        // true and empty -> empty; false and empty -> false
+        assert!(ev(PATIENT, "(1 = 1) and (name[9].family = 'x')").is_empty());
+        assert_eq!(
+            ev1(PATIENT, "(1 = 2) and (name[9].family = 'x')"),
+            Value::Boolean(false)
+        );
+        // true or empty -> true
+        assert_eq!(
+            ev1(PATIENT, "(1 = 1) or (name[9].family = 'x')"),
+            Value::Boolean(true)
+        );
+    }
+
+    #[test]
+    fn membership_union_concat() {
+        assert_eq!(ev1(PATIENT, "'Jim' in name.given"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "'Bob' in name.given"), Value::Boolean(false));
+        // union merges and dedupes
+        assert_eq!(ev(PATIENT, "name.given | name.given").len(), 3);
+        assert_eq!(ev1(PATIENT, "'a' & 'b'"), Value::String("ab".into()));
+        // empty operand acts as ''
+        assert_eq!(
+            ev1(PATIENT, "name[9].family & 'x'"),
+            Value::String("x".into())
+        );
+    }
 }
