@@ -1,8 +1,33 @@
 #![allow(dead_code)] // not yet wired into the public API
 
-use crate::ast::{Expr, Literal};
+use crate::ast::{BinOp, Expr, Literal, TypeOp};
 use crate::error::Error;
 use crate::lexer::{Token, tokenize};
+
+enum Op {
+    Bin(BinOp),
+    Type(TypeOp),
+}
+
+// binding powers, loosest first (FHIRPath precedence)
+fn operator(t: &Token) -> Option<(Op, u8)> {
+    match t {
+        Token::Or => Some((Op::Bin(BinOp::Or), 1)),
+        Token::And => Some((Op::Bin(BinOp::And), 2)),
+        Token::In => Some((Op::Bin(BinOp::In), 3)),
+        Token::Eq => Some((Op::Bin(BinOp::Eq), 4)),
+        Token::Ne => Some((Op::Bin(BinOp::Ne), 4)),
+        Token::Lt => Some((Op::Bin(BinOp::Lt), 5)),
+        Token::Le => Some((Op::Bin(BinOp::Le), 5)),
+        Token::Gt => Some((Op::Bin(BinOp::Gt), 5)),
+        Token::Ge => Some((Op::Bin(BinOp::Ge), 5)),
+        Token::Pipe => Some((Op::Bin(BinOp::Union), 6)),
+        Token::Is => Some((Op::Type(TypeOp::Is), 7)),
+        Token::As => Some((Op::Type(TypeOp::As), 7)),
+        Token::Amp => Some((Op::Bin(BinOp::Concat), 8)),
+        _ => None,
+    }
+}
 
 pub fn parse(input: &str) -> Result<Expr, Error> {
     let tokens = tokenize(input)?;
@@ -44,8 +69,47 @@ impl Parser {
         }
     }
 
-    fn parse_expr(&mut self, _min_bp: u8) -> Result<Expr, Error> {
-        self.parse_postfix()
+    fn parse_expr(&mut self, min_bp: u8) -> Result<Expr, Error> {
+        let mut lhs = self.parse_postfix()?;
+        while let Some((op, bp)) = self.peek().and_then(operator) {
+            if bp < min_bp {
+                break;
+            }
+            self.next();
+            lhs = match op {
+                // bp + 1 keeps equal-power operators left-associative
+                Op::Bin(op) => Expr::Binary {
+                    op,
+                    lhs: Box::new(lhs),
+                    rhs: Box::new(self.parse_expr(bp + 1)?),
+                },
+                Op::Type(op) => Expr::TypeTest {
+                    op,
+                    expr: Box::new(lhs),
+                    type_name: self.parse_type_name()?,
+                },
+            };
+        }
+        Ok(lhs)
+    }
+
+    // a qualified identifier: Ident ('.' Ident)*, e.g. Quantity or System.String
+    fn parse_type_name(&mut self) -> Result<String, Error> {
+        let mut name = match self.next() {
+            Some(Token::Ident(s)) => s,
+            other => return Err(Error::Parse(format!("expected type name, got {other:?}"))),
+        };
+        while self.peek() == Some(&Token::Dot) {
+            self.next();
+            match self.next() {
+                Some(Token::Ident(s)) => {
+                    name.push('.');
+                    name.push_str(&s);
+                }
+                other => return Err(Error::Parse(format!("expected type name, got {other:?}"))),
+            }
+        }
+        Ok(name)
     }
 
     fn parse_postfix(&mut self) -> Result<Expr, Error> {
@@ -254,5 +318,74 @@ mod tests {
         assert!(matches!(parse("name."), Err(crate::Error::Parse(_))));
         assert!(matches!(parse("name)"), Err(crate::Error::Parse(_))));
         assert!(matches!(parse("(name"), Err(crate::Error::Parse(_))));
+    }
+
+    fn bin(op: BinOp, l: Expr, r: Expr) -> Expr {
+        Expr::Binary {
+            op,
+            lhs: Box::new(l),
+            rhs: Box::new(r),
+        }
+    }
+
+    #[test]
+    fn precedence() {
+        // and binds tighter than or
+        assert_eq!(
+            parse("a or b and c").unwrap(),
+            bin(BinOp::Or, id("a"), bin(BinOp::And, id("b"), id("c")))
+        );
+        // equality binds tighter than and
+        assert_eq!(
+            parse("a = b and c = d").unwrap(),
+            bin(
+                BinOp::And,
+                bin(BinOp::Eq, id("a"), id("b")),
+                bin(BinOp::Eq, id("c"), id("d"))
+            )
+        );
+        // comparison binds tighter than equality; union tighter than comparison
+        assert_eq!(
+            parse("a | b < c").unwrap(),
+            bin(BinOp::Lt, bin(BinOp::Union, id("a"), id("b")), id("c"))
+        );
+        // concat binds tighter than comparison
+        assert_eq!(
+            parse("a & b = c").unwrap(),
+            bin(BinOp::Eq, bin(BinOp::Concat, id("a"), id("b")), id("c"))
+        );
+        // membership sits between and and equality
+        assert_eq!(
+            parse("a in b and c").unwrap(),
+            bin(BinOp::And, bin(BinOp::In, id("a"), id("b")), id("c"))
+        );
+        // left associativity
+        assert_eq!(
+            parse("a | b | c").unwrap(),
+            bin(BinOp::Union, bin(BinOp::Union, id("a"), id("b")), id("c"))
+        );
+    }
+
+    #[test]
+    fn type_operators() {
+        assert_eq!(
+            parse("value is Quantity").unwrap(),
+            Expr::TypeTest {
+                op: TypeOp::Is,
+                expr: Box::new(id("value")),
+                type_name: "Quantity".into()
+            }
+        );
+        assert_eq!(
+            parse("(value as Quantity).unit").unwrap(),
+            Expr::Member {
+                base: Box::new(Expr::TypeTest {
+                    op: TypeOp::As,
+                    expr: Box::new(id("value")),
+                    type_name: "Quantity".into()
+                }),
+                name: "unit".into()
+            }
+        );
     }
 }
