@@ -17,6 +17,8 @@ function M.check()
       "Navigation is unavailable for a buffer without it; the plugin will not crash.",
     })
   end
+
+  vim.health.ok("picker: vim.ui.select (dressing.nvim or telescope-ui-select add fuzzy filtering)")
 end
 
 return M
