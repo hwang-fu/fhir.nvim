@@ -1,5 +1,5 @@
 describe("health", function()
-  it("runs without error and reports nvim version + json parser", function()
+  it("runs without error and reports nvim version, json parser, and picker", function()
     assert.has_no.errors(function()
       require("fhir.health").check()
     end)
