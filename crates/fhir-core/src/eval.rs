@@ -5,7 +5,7 @@ use crate::ast::{Expr, Literal};
 use crate::error::Error;
 use crate::value::{Value, from_json};
 
-pub fn eval(expr: &Expr, focus: &[Value], _root: &[Value]) -> Result<Vec<Value>, Error> {
+pub fn eval(expr: &Expr, focus: &[Value]) -> Result<Vec<Value>, Error> {
     match expr {
         Expr::Literal(lit) => Ok(vec![literal_value(lit)]),
         Expr::This => Ok(focus.to_vec()),
@@ -24,12 +24,12 @@ pub fn eval(expr: &Expr, focus: &[Value], _root: &[Value]) -> Result<Vec<Value>,
             Ok(out)
         }
         Expr::Member { base, name } => {
-            let base = eval(base, focus, _root)?;
+            let base = eval(base, focus)?;
             Ok(base.iter().flat_map(|item| access(item, name)).collect())
         }
         Expr::Index { base, index } => {
-            let items = eval(base, focus, _root)?;
-            let idx = eval(index, focus, _root)?;
+            let items = eval(base, focus)?;
+            let idx = eval(index, focus)?;
             let n = match idx.as_slice() {
                 [Value::Integer(n)] => *n,
                 other => {
