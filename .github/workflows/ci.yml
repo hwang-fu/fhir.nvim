@@ -29,3 +29,26 @@ jobs:
 
       - name: luacheck
         run: luacheck lua
+
+  test:
+    name: Tests (nvim ${{ matrix.nvim }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        nvim: ["v0.10.0", "stable"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.nvim }}
+
+      - name: Install the json Treesitter parser
+        run: |
+          git clone --depth 1 -b master https://github.com/nvim-treesitter/nvim-treesitter .tests/nvim-treesitter
+          nvim --headless --cmd "set rtp+=.tests/nvim-treesitter" -c "TSInstallSync json" -c "qa"
+
+      - name: Run tests
+        run: make test
