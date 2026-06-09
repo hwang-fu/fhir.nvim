@@ -14,7 +14,7 @@ pub fn evaluate(resource_json: &str, expression: &str) -> Result<Vec<Value>, Err
         serde_json::from_str(resource_json).map_err(|e| Error::Eval(format!("bad json: {e}")))?;
     let expr = parser::parse(expression)?;
     let input = value::from_json(&json);
-    eval::eval(&expr, &input, &input)
+    eval::eval(&expr, &input)
 }
 
 pub fn ping() -> &'static str {
