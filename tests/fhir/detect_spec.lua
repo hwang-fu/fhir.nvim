@@ -21,6 +21,12 @@ describe("detect", function()
     assert.is_not_nil(vim.api.nvim_buf_get_commands(buf, {}).FhirUsages)
   end)
 
+  it("attach also creates a buffer-local :FhirOutline command", function()
+    local buf = h.fixture_buf("bundle_urn.json")
+    detect.attach(buf)
+    assert.is_not_nil(vim.api.nvim_buf_get_commands(buf, {}).FhirOutline)
+  end)
+
   it("detach tears down state and clears the index cache", function()
     local buf = h.fixture_buf("contained.json")
     detect.attach(buf)
