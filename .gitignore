@@ -40,3 +40,6 @@ luac.out
 *.hex
 
 .tests/
+
+# Generated vimdoc tags (plugin managers regenerate these)
+doc/tags
