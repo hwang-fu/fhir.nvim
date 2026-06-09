@@ -4,3 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+rust_decimal = "1.42.0"
+serde_json = { version = "1.0.150", features = ["arbitrary_precision"] }
+
+[dev-dependencies]
+roxmltree = "0.21.1"
