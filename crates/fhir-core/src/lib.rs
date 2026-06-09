@@ -243,4 +243,52 @@ mod tests {
             Value::Integer(0)
         );
     }
+
+    #[test]
+    fn subsetting() {
+        assert_eq!(
+            ev1(PATIENT, "name.given.first()"),
+            Value::String("Peter".into())
+        );
+        assert_eq!(
+            ev1(PATIENT, "name.given.last()"),
+            Value::String("Jim".into())
+        );
+        assert_eq!(ev1(PATIENT, "name.given.tail().count()"), Value::Integer(2));
+        assert_eq!(
+            ev1(PATIENT, "name.given.skip(1).first()"),
+            Value::String("James".into())
+        );
+        assert_eq!(
+            ev1(PATIENT, "name.given.take(2).count()"),
+            Value::Integer(2)
+        );
+        assert_eq!(ev1(PATIENT, "id.single()"), Value::String("p1".into()));
+        assert!(ev(PATIENT, "nothing.first()").is_empty());
+        assert!(ev(PATIENT, "nothing.single()").is_empty());
+        assert!(matches!(
+            evaluate(PATIENT, "name.given.single()"),
+            Err(Error::Eval(_))
+        ));
+    }
+
+    #[test]
+    fn is_and_as() {
+        assert_eq!(
+            ev1(OBS, "Observation.value is Quantity"),
+            Value::Boolean(true)
+        );
+        assert_eq!(
+            ev1(OBS, "Observation.value is string"),
+            Value::Boolean(false)
+        );
+        assert_eq!(
+            strings(&ev(OBS, "(Observation.value as Quantity).unit")),
+            ["lbs"]
+        );
+        assert!(ev(OBS, "Observation.value as string").is_empty());
+        assert_eq!(ev1(PATIENT, "birthDate is date"), Value::Boolean(true));
+        // is on empty -> empty
+        assert!(ev(PATIENT, "nothing is string").is_empty());
+    }
 }
