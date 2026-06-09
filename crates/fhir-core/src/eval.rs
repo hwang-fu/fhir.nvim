@@ -52,7 +52,15 @@ pub fn eval(expr: &Expr, focus: &[Value]) -> Result<Vec<Value>, Error> {
             let rhs = eval(rhs, focus)?;
             binary(*op, lhs, rhs)
         }
-        Expr::Call { .. } | Expr::TypeTest { .. } => Err(Error::Eval("not implemented".into())),
+        Expr::Call { base, name, args } => {
+            // a method call's input is its base; a bare call's input is the focus
+            let input = match base {
+                Some(b) => eval(b, focus)?,
+                None => focus.to_vec(),
+            };
+            crate::functions::call(name, &input, args)
+        }
+        Expr::TypeTest { .. } => Err(Error::Eval("not implemented".into())),
     }
 }
 
