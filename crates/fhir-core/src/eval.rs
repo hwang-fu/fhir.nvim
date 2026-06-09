@@ -5,9 +5,9 @@ use std::cmp::Ordering;
 
 use rust_decimal::Decimal;
 
-use crate::ast::{BinOp, Expr, Literal};
+use crate::ast::{BinOp, Expr, Literal, TypeOp};
 use crate::error::Error;
-use crate::value::{Value, from_json};
+use crate::value::{Value, from_json, matches_type};
 
 pub fn eval(expr: &Expr, focus: &[Value]) -> Result<Vec<Value>, Error> {
     match expr {
@@ -58,9 +58,25 @@ pub fn eval(expr: &Expr, focus: &[Value]) -> Result<Vec<Value>, Error> {
                 Some(b) => eval(b, focus)?,
                 None => focus.to_vec(),
             };
-            crate::functions::call(name, &input, args)
+            crate::functions::call(name, &input, args, focus)
         }
-        Expr::TypeTest { .. } => Err(Error::Eval("not implemented".into())),
+        Expr::TypeTest {
+            op,
+            expr,
+            type_name,
+        } => {
+            let operand = eval(expr, focus)?;
+            match op {
+                TypeOp::Is => match singleton(&operand)? {
+                    None => Ok(vec![]),
+                    Some(v) => Ok(vec![Value::Boolean(matches_type(v, type_name))]),
+                },
+                TypeOp::As => Ok(operand
+                    .into_iter()
+                    .filter(|v| matches_type(v, type_name))
+                    .collect()),
+            }
+        }
     }
 }
 
