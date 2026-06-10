@@ -24,4 +24,19 @@ describe("fhir_core native module", function()
     assert.is_nil(result)
     assert.is_string(err)
   end)
+
+  it("resolve() reaches back into lua", function()
+    if not ok then
+      print("SKIP: native module not built (run `make build`)")
+      return
+    end
+    local obs = '{"resourceType":"Observation","id":"o1","subject":{"reference":"Patient/p1"}}'
+    local result, err = fhir_core.eval(obs, "subject.resolve().id", function(ref)
+      if ref == "Patient/p1" then
+        return '{"resourceType":"Patient","id":"p1"}'
+      end
+    end)
+    assert.is_nil(err)
+    assert.are.same({ "p1" }, vim.json.decode(result))
+  end)
 end)

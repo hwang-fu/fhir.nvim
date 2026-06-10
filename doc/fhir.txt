@@ -33,6 +33,9 @@ throws on malformed input.
   |:checkhealth| reports whether it is present.
 - Optional: `dressing.nvim` or `telescope-ui-select` give |vim.ui.select| a
   fuzzy picker, which the outline and find-usages lists use.
+- Optional: the native FHIRPath engine powers |:FhirEval|. Build it from the
+  plugin directory with `make build` (needs a Rust toolchain). Everything
+  else works without it.
 
 ==============================================================================
 3. Installation                                          *fhir-installation*
@@ -46,7 +49,8 @@ With lazy.nvim: >lua
 `opts = {}` makes lazy.nvim call |fhir.setup()| for you. Other plugin managers
 are analogous - install the plugin and call `require("fhir").setup()`.
 
-v1 is pure Lua and needs no build step.
+Navigation is pure Lua and needs no build step. FHIRPath evaluation uses an
+optional native module; see |fhir-requirements|.
 
 ==============================================================================
 4. Setup & configuration                                 *fhir-configuration*
@@ -74,6 +78,7 @@ keymaps                         table (default {})
           goto_reference   mapping for |:FhirGoto|
           find_usages      mapping for |:FhirUsages|
           outline          mapping for |:FhirOutline|
+          eval             mapping for |:FhirEval| (opens the prompt)
 
         Example (a suggestion, not a default): >lua
             require("fhir").setup({
@@ -81,9 +86,16 @@ keymaps                         table (default {})
                 goto_reference = "gd",
                 find_usages    = "gr",
                 outline        = "<leader>fo",
+                eval           = "<leader>fe",
               },
             })
 <
+                                                              *fhir-opt-native*
+native                          table (default {})
+        Settings for the native FHIRPath engine.
+          dir    Directory containing the built `fhir_core` module. Defaults
+                 to the plugin's own `.tests/` directory, where `make build`
+                 places it.
 ==============================================================================
 5. Commands                                                  *fhir-commands*
 
@@ -101,6 +113,13 @@ The feature commands are buffer-local: they exist only in attached buffers.
 :FhirOutline                                                     *:FhirOutline*
         Show a picker of every resource in the buffer, each with a
         human-readable label; select one to jump to it.
+
+:FhirEval [{expr}]                                                *:FhirEval*
+        Evaluate the FHIRPath expression {expr} against the resource under
+        the cursor and show the result in a floating window titled with that
+        resource's identity (`q`, `<Esc>`, or leaving the window closes it).
+        Without {expr}, prompts for one. Requires the native engine (see
+        |fhir-requirements|); without it a notice explains how to build it.
 
 :FhirEnable                                                      *:FhirEnable*
         Attach fhir.nvim to the current buffer. Useful when `detection` is
@@ -132,11 +151,21 @@ Outline ~
         heuristic (`code.text`, then `code.coding[].display`, then a formatted
         `name`, falling back to `Type/id`).
 
+FHIRPath evaluation ~
+        |:FhirEval| runs a FHIRPath expression against the resource under the
+        cursor (in a Bundle, the entry you are inside). Each value of the
+        result collection is shown as one line of JSON. `resolve()` follows
+        references through the same machinery as |:FhirGoto|, so >
+            subject.resolve().name.given
+<       works inside a Bundle. The engine implements a documented subset of
+        FHIRPath; see the README for the supported functions and the measured
+        conformance rate.
+
 ==============================================================================
 7. Health                                                      *fhir-health*
 
 Run |:checkhealth| `fhir` to verify the Neovim version, the `json` Treesitter
-parser, and the picker.
+parser, the picker, and the FHIRPath engine.
 
 ==============================================================================
 8. Limitations                                            *fhir-limitations*
@@ -144,6 +173,8 @@ parser, and the picker.
 - Target is FHIR R4 (`4.0.1`).
 - References by `identifier` and conditional references are not resolved.
 - Resolution is single-buffer; cross-file (workspace) and live-server
-  resolution are planned for later milestones.
+  resolution are not supported.
+- FHIRPath coverage is a measured subset (no arithmetic, string/math/
+  conversion functions, or type reflection yet); see the README.
 
 vim:tw=78:ts=8:et:ft=help:norl:

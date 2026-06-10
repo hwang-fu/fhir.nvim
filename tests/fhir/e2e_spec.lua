@@ -69,3 +69,34 @@ describe("end-to-end outline", function()
     )
   end)
 end)
+
+describe("end-to-end eval", function()
+  it("setup + attach + :FhirEval floats the result", function()
+    package.loaded["fhir.native"] = {
+      available = function()
+        return true
+      end,
+      eval = function()
+        return '["final"]', nil
+      end,
+    }
+    package.loaded["fhir.features.eval"] = nil
+    require("fhir").setup({})
+    local buf = h.fixture_buf("bundle_urn.json")
+    vim.api.nvim_win_set_buf(0, buf)
+    require("fhir.detect").attach(buf)
+
+    local ui = require("fhir.ui")
+    local floated
+    local orig = ui.float
+    ui.float = function(lines)
+      floated = lines
+    end
+    vim.cmd("FhirEval status")
+    ui.float = orig
+    package.loaded["fhir.native"] = nil
+    package.loaded["fhir.features.eval"] = nil
+
+    assert.are.same({ '"final"' }, floated)
+  end)
+end)
