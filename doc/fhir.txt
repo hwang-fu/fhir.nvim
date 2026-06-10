@@ -34,7 +34,7 @@ throws on malformed input.
 - Optional: `dressing.nvim` or `telescope-ui-select` give |vim.ui.select| a
   fuzzy picker, which the outline and find-usages lists use.
 - Optional: the native FHIRPath engine powers |:FhirEval|. Get it with
-  |:FhirFetchEngine| (prebuilt for linux/macos, x86_64/aarch64), or build it
+  |:FhirFetchEngine| (prebuilt for linux and apple-silicon macos), or build it
   from the plugin directory with `make build` (needs a Rust toolchain).
   Everything else works without it.
 
@@ -136,8 +136,8 @@ The feature commands are buffer-local: they exist only in attached buffers.
         Download the prebuilt FHIRPath engine for this machine from the
         GitHub release {tag} (default: the pinned `native.tag`), verify it
         against the release's SHA-256 checksums, and install it into
-        Neovim's data directory. Prebuilts cover linux/macos on
-        x86_64/aarch64; elsewhere a notice points at `make build`. This is
+        Neovim's data directory. Prebuilts cover linux (x86_64/aarch64) and
+        apple-silicon macos; elsewhere a notice points at `make build`. This is
         a global command.
 
 :FhirDisable                                                     *:FhirDisable*
