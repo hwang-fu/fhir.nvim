@@ -4,6 +4,7 @@ mod eval;
 mod functions;
 mod lexer;
 mod parser;
+mod schema;
 mod temporal;
 mod value;
 
