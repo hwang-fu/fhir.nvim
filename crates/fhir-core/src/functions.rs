@@ -182,7 +182,10 @@ pub fn call(
             let sep = string_arg(sep, focus, ctx)?;
             Ok(match string_input(input)? {
                 None => vec![],
-                Some(s) => s.split(&sep).map(|p| Value::String(p.to_string())).collect(),
+                Some(s) => s
+                    .split(&sep)
+                    .map(|p| Value::String(p.to_string()))
+                    .collect(),
             })
         }
         ("toChars", []) => Ok(match string_input(input)? {
@@ -211,7 +214,9 @@ pub fn call(
         ("replaceMatches", [p, to]) => {
             let re = regex_arg(p, focus, ctx)?;
             let to = string_arg(to, focus, ctx)?;
-            map_str(input, |s| Value::String(re.replace_all(s, to.as_str()).into_owned()))
+            map_str(input, |s| {
+                Value::String(re.replace_all(s, to.as_str()).into_owned())
+            })
         }
         ("abs", []) => Ok(match number_input(input)? {
             None => vec![],
@@ -275,9 +280,7 @@ pub fn call(
                     };
                     match r {
                         None => vec![],
-                        Some(r) if base_int && exp_int && exp >= Decimal::ZERO => {
-                            int_or_decimal(r)
-                        }
+                        Some(r) if base_int && exp_int && exp >= Decimal::ZERO => int_or_decimal(r),
                         Some(r) => vec![Value::Decimal(r)],
                     }
                 }
@@ -347,6 +350,8 @@ pub fn call(
             }
             Ok(out)
         }
+        ("today", []) => Ok(vec![Value::Date(crate::temporal::today_utc())]),
+        ("now", []) => Ok(vec![Value::DateTime(crate::temporal::now_utc())]),
         _ => Err(Error::Eval(format!("unknown function: {name}"))),
     }
 }
@@ -406,6 +411,7 @@ fn to_string_value(v: &Value) -> Option<Value> {
         Value::Integer(i) => Some(Value::String(i.to_string())),
         Value::Decimal(d) => Some(Value::String(d.to_string())),
         Value::Boolean(b) => Some(Value::String(b.to_string())),
+        Value::Quantity { value, unit } => Some(Value::String(format!("{value} '{unit}'"))),
         Value::Complex { .. } => None,
     }
 }

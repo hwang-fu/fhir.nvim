@@ -1,3 +1,5 @@
+use rust_decimal::Decimal;
+
 use crate::ast::{BinOp, Expr, Literal, TypeOp};
 use crate::error::Error;
 use crate::lexer::{Token, tokenize};
@@ -109,6 +111,26 @@ impl Parser {
         Ok(lhs)
     }
 
+    // a number directly followed by a quoted string or a calendar unit is a
+    // quantity literal; anything else leaves the number untouched
+    fn maybe_quantity(&mut self, num: Literal) -> Expr {
+        let unit = match self.peek() {
+            Some(Token::Str(s)) => Some(s.clone()),
+            Some(Token::Ident(name)) => calendar_unit(name).map(String::from),
+            _ => None,
+        };
+        let Some(unit) = unit else {
+            return Expr::Literal(num);
+        };
+        self.next();
+        let value = match num {
+            Literal::Integer(i) => Decimal::from(i),
+            Literal::Decimal(d) => d,
+            _ => unreachable!("only numeric literals reach maybe_quantity"),
+        };
+        Expr::Literal(Literal::Quantity(value, unit))
+    }
+
     // a qualified identifier: Ident ('.' Ident)*, e.g. Quantity or System.String
     fn parse_type_name(&mut self) -> Result<String, Error> {
         let mut name = match self.next() {
@@ -172,8 +194,8 @@ impl Parser {
         match self.next() {
             Some(Token::True) => Ok(Expr::Literal(Literal::Boolean(true))),
             Some(Token::False) => Ok(Expr::Literal(Literal::Boolean(false))),
-            Some(Token::Int(n)) => Ok(Expr::Literal(Literal::Integer(n))),
-            Some(Token::Dec(d)) => Ok(Expr::Literal(Literal::Decimal(d))),
+            Some(Token::Int(n)) => Ok(self.maybe_quantity(Literal::Integer(n))),
+            Some(Token::Dec(d)) => Ok(self.maybe_quantity(Literal::Decimal(d))),
             Some(Token::Str(s)) => Ok(Expr::Literal(Literal::Str(s))),
             Some(Token::Date(s)) => Ok(Expr::Literal(Literal::Date(s))),
             Some(Token::DateTime(s)) => Ok(Expr::Literal(Literal::DateTime(s))),
@@ -230,6 +252,21 @@ impl Parser {
             }
         }
         Ok(args)
+    }
+}
+
+// calendar duration units, plurals normalized
+fn calendar_unit(name: &str) -> Option<&'static str> {
+    match name {
+        "year" | "years" => Some("year"),
+        "month" | "months" => Some("month"),
+        "week" | "weeks" => Some("week"),
+        "day" | "days" => Some("day"),
+        "hour" | "hours" => Some("hour"),
+        "minute" | "minutes" => Some("minute"),
+        "second" | "seconds" => Some("second"),
+        "millisecond" | "milliseconds" => Some("millisecond"),
+        _ => None,
     }
 }
 
@@ -333,6 +370,27 @@ mod tests {
                 args: vec![Expr::Literal(Literal::Integer(1))]
             }
         );
+    }
+
+    #[test]
+    fn quantity_literals() {
+        assert_eq!(
+            parse("1 year").unwrap(),
+            Expr::Literal(Literal::Quantity("1".parse().unwrap(), "year".into()))
+        );
+        // plurals normalize
+        assert_eq!(
+            parse("4 days").unwrap(),
+            Expr::Literal(Literal::Quantity("4".parse().unwrap(), "day".into()))
+        );
+        assert_eq!(
+            parse("4.5 'mg'").unwrap(),
+            Expr::Literal(Literal::Quantity("4.5".parse().unwrap(), "mg".into()))
+        );
+        // a number NOT followed by a unit stays a plain literal
+        assert_eq!(parse("4").unwrap(), Expr::Literal(Literal::Integer(4)));
+        // and an identifier after a non-number is untouched (trailing token)
+        assert!(parse("name year").is_err());
     }
 
     #[test]

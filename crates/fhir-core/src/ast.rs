@@ -40,6 +40,7 @@ pub enum Literal {
     Str(String),
     Date(String),
     DateTime(String),
+    Quantity(Decimal, String),
 }
 
 #[allow(dead_code)]

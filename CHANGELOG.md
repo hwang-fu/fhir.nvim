@@ -5,7 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [2.1.0] - unreleased
+## [2.2.0] - unreleased
+
+Date and quantity arithmetic; conformance reaches 57.2% of the official
+suite.
+
+### Added
+
+- Quantity literals (`1 year`, `5 'mg'`) and same-unit quantity arithmetic
+  and comparison - including against FHIR Quantity values from documents
+  (`Observation.value > 100 'lbs'`). Mismatched units yield empty; no unit
+  conversion.
+- Date/dateTime arithmetic with calendar durations: precision preserved
+  (`@2014 + 1 year = @2015`), end-of-month clamping, time carry across
+  days, timezone suffixes untouched.
+- `today()` and `now()`.
+
+### Changed
+
+- The default engine release pin (`native.tag`) is `v2.2.0`.
+
+## [2.1.0] - 2026-06-10
 
 Expanded FHIRPath support; the conformance rate more than doubles
 (26.5% -> 54.9% of the official suite).
@@ -70,5 +90,6 @@ Pure Lua, offline, single-buffer, zero-config.
 - `:checkhealth fhir`: Neovim version, `json` Treesitter parser, and picker.
 - `:help fhir` documentation.
 
+[2.1.0]: https://github.com/hwang-fu/fhir.nvim/releases/tag/v2.1.0
 [2.0.0]: https://github.com/hwang-fu/fhir.nvim/releases/tag/v2.0.0
 [1.0.0]: https://github.com/hwang-fu/fhir.nvim/releases/tag/v1.0.0

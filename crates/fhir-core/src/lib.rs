@@ -4,6 +4,7 @@ mod eval;
 mod functions;
 mod lexer;
 mod parser;
+mod temporal;
 mod value;
 
 pub use error::Error;
@@ -394,11 +395,17 @@ mod tests {
     #[test]
     fn arithmetic_operators() {
         assert_eq!(ev1(PATIENT, "2 + 2"), Value::Integer(4));
-        assert_eq!(ev1(PATIENT, "2 + 2.5"), Value::Decimal("4.5".parse().unwrap()));
+        assert_eq!(
+            ev1(PATIENT, "2 + 2.5"),
+            Value::Decimal("4.5".parse().unwrap())
+        );
         assert_eq!(ev1(PATIENT, "5 - 7"), Value::Integer(-2));
         assert_eq!(ev1(PATIENT, "3 * 3"), Value::Integer(9));
         // / always yields a decimal; div is integer division
-        assert_eq!(ev1(PATIENT, "5 / 2"), Value::Decimal("2.5".parse().unwrap()));
+        assert_eq!(
+            ev1(PATIENT, "5 / 2"),
+            Value::Decimal("2.5".parse().unwrap())
+        );
         assert_eq!(ev1(PATIENT, "5 div 2"), Value::Integer(2));
         assert_eq!(ev1(PATIENT, "5 mod 2"), Value::Integer(1));
         // division by zero is empty, not an error
@@ -437,13 +444,31 @@ mod tests {
     #[test]
     fn string_functions() {
         assert_eq!(ev1(PATIENT, "'hello'.length()"), Value::Integer(5));
-        assert_eq!(ev1(PATIENT, "'hello'.upper()"), Value::String("HELLO".into()));
-        assert_eq!(ev1(PATIENT, "'HELLO'.lower()"), Value::String("hello".into()));
-        assert_eq!(ev1(PATIENT, "'hello'.startsWith('he')"), Value::Boolean(true));
+        assert_eq!(
+            ev1(PATIENT, "'hello'.upper()"),
+            Value::String("HELLO".into())
+        );
+        assert_eq!(
+            ev1(PATIENT, "'HELLO'.lower()"),
+            Value::String("hello".into())
+        );
+        assert_eq!(
+            ev1(PATIENT, "'hello'.startsWith('he')"),
+            Value::Boolean(true)
+        );
         assert_eq!(ev1(PATIENT, "'hello'.endsWith('lo')"), Value::Boolean(true));
-        assert_eq!(ev1(PATIENT, "'hello'.contains('ell')"), Value::Boolean(true));
-        assert_eq!(ev1(PATIENT, "'hello'.substring(1)"), Value::String("ello".into()));
-        assert_eq!(ev1(PATIENT, "'hello'.substring(1, 3)"), Value::String("ell".into()));
+        assert_eq!(
+            ev1(PATIENT, "'hello'.contains('ell')"),
+            Value::Boolean(true)
+        );
+        assert_eq!(
+            ev1(PATIENT, "'hello'.substring(1)"),
+            Value::String("ello".into())
+        );
+        assert_eq!(
+            ev1(PATIENT, "'hello'.substring(1, 3)"),
+            Value::String("ell".into())
+        );
         assert!(ev(PATIENT, "'hello'.substring(9)").is_empty());
         assert_eq!(ev1(PATIENT, "'hello'.indexOf('ll')"), Value::Integer(2));
         assert_eq!(ev1(PATIENT, "'hello'.indexOf('x')"), Value::Integer(-1));
@@ -452,13 +477,19 @@ mod tests {
             Value::String("heLLo".into())
         );
         assert_eq!(ev1(PATIENT, "'  hi  '.trim()"), Value::String("hi".into()));
-        assert_eq!(ev1(PATIENT, "'a,b,c'.split(',').count()"), Value::Integer(3));
+        assert_eq!(
+            ev1(PATIENT, "'a,b,c'.split(',').count()"),
+            Value::Integer(3)
+        );
         assert_eq!(
             ev1(PATIENT, "name.given.join('-')"),
             Value::String("Peter-James-Jim".into())
         );
         assert_eq!(ev1(PATIENT, "'abc'.toChars().count()"), Value::Integer(3));
-        assert_eq!(ev1(PATIENT, "'hello'.matches('^h.*o$')"), Value::Boolean(true));
+        assert_eq!(
+            ev1(PATIENT, "'hello'.matches('^h.*o$')"),
+            Value::Boolean(true)
+        );
         assert_eq!(
             ev1(PATIENT, "'hello'.replaceMatches('l+', 'L')"),
             Value::String("heLo".into())
@@ -474,7 +505,10 @@ mod tests {
     #[test]
     fn math_functions() {
         assert_eq!(ev1(PATIENT, "(-5).abs()"), Value::Integer(5));
-        assert_eq!(ev1(PATIENT, "(-5.5).abs()"), Value::Decimal("5.5".parse().unwrap()));
+        assert_eq!(
+            ev1(PATIENT, "(-5.5).abs()"),
+            Value::Decimal("5.5".parse().unwrap())
+        );
         assert_eq!(ev1(PATIENT, "(2.4).ceiling()"), Value::Integer(3));
         assert_eq!(ev1(PATIENT, "(2.6).floor()"), Value::Integer(2));
         // round() is half away from zero, not banker's
@@ -484,7 +518,10 @@ mod tests {
             Value::Decimal("2.35".parse().unwrap())
         );
         assert_eq!(ev1(PATIENT, "(2.7).truncate()"), Value::Integer(2));
-        assert_eq!(ev1(PATIENT, "(9).sqrt()"), Value::Decimal("3".parse().unwrap()));
+        assert_eq!(
+            ev1(PATIENT, "(9).sqrt()"),
+            Value::Decimal("3".parse().unwrap())
+        );
         assert!(ev(PATIENT, "(-1).sqrt()").is_empty());
         assert_eq!(ev1(PATIENT, "(2).power(10)"), Value::Integer(1024));
         assert!(ev(PATIENT, "(0).ln()").is_empty());
@@ -492,9 +529,63 @@ mod tests {
     }
 
     #[test]
+    fn quantity_values() {
+        assert_eq!(ev1(PATIENT, "1 year = 1 year"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "1 'mg' = 2 'mg'"), Value::Boolean(false));
+        assert_eq!(
+            evaluate_json(PATIENT, "1 year").unwrap(),
+            r#"[{"unit":"year","value":1}]"#
+        );
+        assert_eq!(ev1(PATIENT, "(1 year) is Quantity"), Value::Boolean(true));
+        assert_eq!(
+            ev1(PATIENT, "(4 days).toString()"),
+            Value::String("4 'day'".into())
+        );
+    }
+
+    #[test]
+    fn temporal_and_quantity_arithmetic() {
+        assert_eq!(ev1(PATIENT, "@2014 + 1 year"), Value::Date("2015".into()));
+        assert_eq!(
+            ev1(PATIENT, "@2014-01-31 + 1 month"),
+            Value::Date("2014-02-28".into())
+        );
+        assert_eq!(
+            ev1(PATIENT, "@2015-02-04T23:30:00Z + 1 hour"),
+            Value::DateTime("2015-02-05T00:30:00Z".into())
+        );
+        assert_eq!(ev1(PATIENT, "@2015 - 1 year"), Value::Date("2014".into()));
+        // unit finer than precision -> empty
+        assert!(ev(PATIENT, "@2014 + 1 hour").is_empty());
+        // same-unit quantity arithmetic; mismatches are empty
+        assert_eq!(
+            ev1(PATIENT, "(1 'mg' + 2 'mg') = 3 'mg'"),
+            Value::Boolean(true)
+        );
+        assert!(ev(PATIENT, "1 'mg' + 1 'kg'").is_empty());
+        assert_eq!(ev1(PATIENT, "(2 'mg' * 3) = 6 'mg'"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "1 'mg' < 2 'mg'"), Value::Boolean(true));
+        assert!(ev(PATIENT, "1 'mg' < 1 'kg'").is_empty());
+        // mismatched units are unknown for equality too
+        assert!(ev(PATIENT, "1 'mg' = 1 'kg'").is_empty());
+        // quantities from FHIR data compare with literals
+        assert_eq!(
+            ev1(OBS, "Observation.value > 100 'lbs'"),
+            Value::Boolean(true)
+        );
+        assert_eq!(
+            ev1(OBS, "Observation.value = 185 'lbs'"),
+            Value::Boolean(true)
+        );
+    }
+
+    #[test]
     fn conversion_functions() {
         assert_eq!(ev1(PATIENT, "(42).toString()"), Value::String("42".into()));
-        assert_eq!(ev1(PATIENT, "true.toString()"), Value::String("true".into()));
+        assert_eq!(
+            ev1(PATIENT, "true.toString()"),
+            Value::String("true".into())
+        );
         assert_eq!(ev1(PATIENT, "'42'.toInteger()"), Value::Integer(42));
         assert!(ev(PATIENT, "'x'.toInteger()").is_empty());
         assert_eq!(
@@ -503,15 +594,37 @@ mod tests {
         );
         assert_eq!(ev1(PATIENT, "'true'.toBoolean()"), Value::Boolean(true));
         assert_eq!(ev1(PATIENT, "(1).toBoolean()"), Value::Boolean(true));
-        assert_eq!(ev1(PATIENT, "'42'.convertsToInteger()"), Value::Boolean(true));
-        assert_eq!(ev1(PATIENT, "'x'.convertsToInteger()"), Value::Boolean(false));
+        assert_eq!(
+            ev1(PATIENT, "'42'.convertsToInteger()"),
+            Value::Boolean(true)
+        );
+        assert_eq!(
+            ev1(PATIENT, "'x'.convertsToInteger()"),
+            Value::Boolean(false)
+        );
         assert_eq!(
             ev1(PATIENT, "'2015-02-04'.convertsToDate()"),
             Value::Boolean(true)
         );
         assert_eq!(ev1(PATIENT, "'x'.convertsToDate()"), Value::Boolean(false));
         assert_eq!(ev1(PATIENT, "(1).convertsToString()"), Value::Boolean(true));
-        assert_eq!(ev1(PATIENT, "(1.5).convertsToInteger()"), Value::Boolean(false));
+        assert_eq!(
+            ev1(PATIENT, "(1.5).convertsToInteger()"),
+            Value::Boolean(false)
+        );
+    }
+
+    #[test]
+    fn today_and_now() {
+        assert_eq!(ev1(PATIENT, "today() = today()"), Value::Boolean(true));
+        assert!(matches!(ev1(PATIENT, "today()"), Value::Date(_)));
+        assert!(matches!(ev1(PATIENT, "now()"), Value::DateTime(_)));
+        assert_eq!(ev1(PATIENT, "birthDate <= today()"), Value::Boolean(true));
+        // the clock plays with the calendar module
+        assert_eq!(
+            ev1(PATIENT, "today() < today() + 1 day"),
+            Value::Boolean(true)
+        );
     }
 
     #[test]
