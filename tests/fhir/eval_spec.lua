@@ -1,7 +1,7 @@
 local h = require("tests.helpers")
 
 describe("eval feature", function()
-  local fake_native, floated, notified, eval_feature, ui
+  local fake_native, floated, float_opts, notified, eval_feature, ui
 
   before_each(function()
     fake_native = {
@@ -17,9 +17,10 @@ describe("eval feature", function()
     package.loaded["fhir.features.eval"] = nil
     eval_feature = require("fhir.features.eval")
     ui = require("fhir.ui")
-    floated, notified = nil, nil
-    ui.float = function(lines)
+    floated, float_opts, notified = nil, nil, nil
+    ui.float = function(lines, o)
       floated = lines
+      float_opts = o
     end
     ui.notify = function(msg)
       notified = msg
@@ -44,6 +45,8 @@ describe("eval feature", function()
     assert.are.equal("status", fake_native.seen.expr)
     assert.are.equal("function", type(fake_native.seen.resolver))
     assert.are.same({ '"Peter"', '"James"' }, floated)
+    -- the float is titled with the resource the expression ran against
+    assert.are.equal("Observation/o1", float_opts.title)
   end)
 
   it("the resolver callback returns the referenced resource's json", function()
