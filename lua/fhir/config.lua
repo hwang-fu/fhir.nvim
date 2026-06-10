@@ -3,7 +3,9 @@ local M = {}
 local defaults = {
   detection = "auto",
   keymaps = {},
-  native = {},
+  -- `tag` pins which engine release :FhirFetchEngine installs and the loader
+  -- looks for; `dir` (unset by default) overrides the search path entirely.
+  native = { tag = "v2.0.0" },
 }
 
 -- Active config; initialized from defaults so get() works before setup() is called.
@@ -15,6 +17,9 @@ local function validate(opts)
   end
   if opts.native ~= nil and opts.native.dir ~= nil and type(opts.native.dir) ~= "string" then
     error("fhir: native.dir must be a string")
+  end
+  if opts.native ~= nil and opts.native.tag ~= nil and type(opts.native.tag) ~= "string" then
+    error("fhir: native.tag must be a string")
   end
 end
 

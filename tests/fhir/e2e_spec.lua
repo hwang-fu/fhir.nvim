@@ -100,3 +100,20 @@ describe("end-to-end eval", function()
     assert.are.same({ '"final"' }, floated)
   end)
 end)
+
+describe("engine fetch command", function()
+  it("setup registers :FhirFetchEngine and it delegates the tag", function()
+    require("fhir").setup({})
+    local fetch = require("fhir.fetch")
+    local orig = fetch.run
+    local seen
+    fetch.run = function(tag)
+      seen = tag or "default"
+    end
+    vim.cmd("FhirFetchEngine v1.2.3")
+    assert.are.equal("v1.2.3", seen)
+    vim.cmd("FhirFetchEngine")
+    assert.are.equal("default", seen)
+    fetch.run = orig
+  end)
+end)

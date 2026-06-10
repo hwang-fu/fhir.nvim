@@ -12,17 +12,35 @@ local function plugin_root()
   return debug.getinfo(1, "S").source:match("^@(.*)lua/fhir/native%.lua$")
 end
 
+-- Candidate engine directories, highest priority first: an explicit config
+-- dir, the pinned release in the data dir, then a source build in the repo.
+function M._dirs()
+  local dirs = {}
+  local cfg = config.get().native
+  if cfg.dir then
+    dirs[#dirs + 1] = cfg.dir
+  end
+  dirs[#dirs + 1] = require("fhir.fetch").dir(cfg.tag)
+  local root = plugin_root()
+  if root then
+    dirs[#dirs + 1] = root .. ".tests"
+  end
+  return dirs
+end
+
 local function load()
   if mod or failed then
     return mod
   end
-  local dir = config.get().native.dir
-  if not dir then
-    local root = plugin_root()
-    dir = root and (root .. ".tests")
+  -- build the prefix in one piece so the priority order survives prepending
+  local entries = {}
+  for _, dir in ipairs(M._dirs()) do
+    if not package.cpath:find(dir, 1, true) then
+      entries[#entries + 1] = dir .. "/?.so"
+    end
   end
-  if dir and not package.cpath:find(dir, 1, true) then
-    package.cpath = dir .. "/?.so;" .. package.cpath
+  if #entries > 0 then
+    package.cpath = table.concat(entries, ";") .. ";" .. package.cpath
   end
   local ok, m = pcall(M._require, "fhir_core")
   if ok then

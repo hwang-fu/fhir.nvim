@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+            lib: libfhir_core.so
+          - os: ubuntu-24.04-arm
+            platform: linux-aarch64
+            lib: libfhir_core.so
+          - os: macos-13
+            platform: macos-x86_64
+            lib: libfhir_core.dylib
+          - os: macos-latest
+            platform: macos-aarch64
+            lib: libfhir_core.dylib
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        run: cargo build --release -p fhir-core-lua
+
+      - name: Rename artifact
+        run: cp "target/release/${{ matrix.lib }}" "fhir_core-${{ matrix.platform }}.so"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fhir_core-${{ matrix.platform }}
+          path: fhir_core-${{ matrix.platform }}.so
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Checksums
+        run: sha256sum fhir_core-*.so > SHA256SUMS
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            fhir_core-*.so
+            SHA256SUMS
