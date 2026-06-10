@@ -470,4 +470,24 @@ mod tests {
             Err(Error::Eval(_))
         ));
     }
+
+    #[test]
+    fn math_functions() {
+        assert_eq!(ev1(PATIENT, "(-5).abs()"), Value::Integer(5));
+        assert_eq!(ev1(PATIENT, "(-5.5).abs()"), Value::Decimal("5.5".parse().unwrap()));
+        assert_eq!(ev1(PATIENT, "(2.4).ceiling()"), Value::Integer(3));
+        assert_eq!(ev1(PATIENT, "(2.6).floor()"), Value::Integer(2));
+        // round() is half away from zero, not banker's
+        assert_eq!(ev1(PATIENT, "(2.5).round()"), Value::Integer(3));
+        assert_eq!(
+            ev1(PATIENT, "(2.345).round(2)"),
+            Value::Decimal("2.35".parse().unwrap())
+        );
+        assert_eq!(ev1(PATIENT, "(2.7).truncate()"), Value::Integer(2));
+        assert_eq!(ev1(PATIENT, "(9).sqrt()"), Value::Decimal("3".parse().unwrap()));
+        assert!(ev(PATIENT, "(-1).sqrt()").is_empty());
+        assert_eq!(ev1(PATIENT, "(2).power(10)"), Value::Integer(1024));
+        assert!(ev(PATIENT, "(0).ln()").is_empty());
+        assert!(ev(PATIENT, "nothing.abs()").is_empty());
+    }
 }
