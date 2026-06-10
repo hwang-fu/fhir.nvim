@@ -41,13 +41,20 @@ function M.float(lines, opts)
     style = "minimal",
     border = "rounded",
   })
-  for _, lhs in ipairs({ "q", "<Esc>" }) do
-    vim.keymap.set("n", lhs, function()
-      if vim.api.nvim_win_is_valid(win) then
-        vim.api.nvim_win_close(win, true)
-      end
-    end, { buffer = buf, nowait = true })
+  local function close()
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
   end
+  for _, lhs in ipairs({ "q", "<Esc>" }) do
+    vim.keymap.set("n", lhs, close, { buffer = buf, nowait = true })
+  end
+  -- a hover-style float should never outlive its focus
+  vim.api.nvim_create_autocmd("WinLeave", {
+    buffer = buf,
+    once = true,
+    callback = close,
+  })
   return win, buf
 end
 
