@@ -544,6 +544,42 @@ mod tests {
     }
 
     #[test]
+    fn temporal_and_quantity_arithmetic() {
+        assert_eq!(ev1(PATIENT, "@2014 + 1 year"), Value::Date("2015".into()));
+        assert_eq!(
+            ev1(PATIENT, "@2014-01-31 + 1 month"),
+            Value::Date("2014-02-28".into())
+        );
+        assert_eq!(
+            ev1(PATIENT, "@2015-02-04T23:30:00Z + 1 hour"),
+            Value::DateTime("2015-02-05T00:30:00Z".into())
+        );
+        assert_eq!(ev1(PATIENT, "@2015 - 1 year"), Value::Date("2014".into()));
+        // unit finer than precision -> empty
+        assert!(ev(PATIENT, "@2014 + 1 hour").is_empty());
+        // same-unit quantity arithmetic; mismatches are empty
+        assert_eq!(
+            ev1(PATIENT, "(1 'mg' + 2 'mg') = 3 'mg'"),
+            Value::Boolean(true)
+        );
+        assert!(ev(PATIENT, "1 'mg' + 1 'kg'").is_empty());
+        assert_eq!(ev1(PATIENT, "(2 'mg' * 3) = 6 'mg'"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "1 'mg' < 2 'mg'"), Value::Boolean(true));
+        assert!(ev(PATIENT, "1 'mg' < 1 'kg'").is_empty());
+        // mismatched units are unknown for equality too
+        assert!(ev(PATIENT, "1 'mg' = 1 'kg'").is_empty());
+        // quantities from FHIR data compare with literals
+        assert_eq!(
+            ev1(OBS, "Observation.value > 100 'lbs'"),
+            Value::Boolean(true)
+        );
+        assert_eq!(
+            ev1(OBS, "Observation.value = 185 'lbs'"),
+            Value::Boolean(true)
+        );
+    }
+
+    #[test]
     fn conversion_functions() {
         assert_eq!(ev1(PATIENT, "(42).toString()"), Value::String("42".into()));
         assert_eq!(
