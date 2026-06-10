@@ -59,3 +59,20 @@ jobs:
 
       - name: Run tests
         run: make test
+
+  rust:
+    name: Rust tests
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo test
+        run: cargo test -p fhir-core
+
+      - name: cargo clippy
+        run: cargo clippy -p fhir-core -- -D warnings
