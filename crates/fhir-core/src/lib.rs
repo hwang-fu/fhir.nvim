@@ -4,6 +4,7 @@ mod eval;
 mod functions;
 mod lexer;
 mod parser;
+mod temporal;
 mod value;
 
 pub use error::Error;
