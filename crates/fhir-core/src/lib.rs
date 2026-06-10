@@ -16,9 +16,7 @@ pub fn evaluate(resource_json: &str, expression: &str) -> Result<Vec<Value>, Err
 /// Like [`evaluate`], but renders the result collection as a compact JSON
 /// array string - the form foreign callers (e.g. the editor binding) consume.
 pub fn evaluate_json(resource_json: &str, expression: &str) -> Result<String, Error> {
-    let values = evaluate(resource_json, expression)?;
-    let rendered: Vec<serde_json::Value> = values.iter().map(value::to_json).collect();
-    serde_json::to_string(&rendered).map_err(|e| Error::Eval(format!("render: {e}")))
+    Engine::new().evaluate_json(resource_json, expression)
 }
 
 /// Resolves a FHIR reference (e.g. "Patient/p1") to a resource. How references
@@ -51,6 +49,13 @@ impl Engine {
             resolver: self.resolver.as_deref(),
         };
         eval::eval(&expr, &input, &ctx)
+    }
+
+    /// Like [`Engine::evaluate`], rendered as a compact JSON array string.
+    pub fn evaluate_json(&self, resource_json: &str, expression: &str) -> Result<String, Error> {
+        let values = self.evaluate(resource_json, expression)?;
+        let rendered: Vec<serde_json::Value> = values.iter().map(value::to_json).collect();
+        serde_json::to_string(&rendered).map_err(|e| Error::Eval(format!("render: {e}")))
     }
 }
 
@@ -375,5 +380,14 @@ mod tests {
         assert_eq!(evaluate_json(OBS, "value.unit").unwrap(), r#"["lbs"]"#);
         assert!(evaluate_json(PATIENT, "1 +").is_err());
         assert!(evaluate_json("not json", "name").is_err());
+    }
+
+    #[test]
+    fn engine_evaluate_json_uses_the_resolver() {
+        let engine = Engine::new().with_resolver(Box::new(FakeResolver));
+        assert_eq!(
+            engine.evaluate_json(OBS, "subject.resolve().id").unwrap(),
+            r#"["p1"]"#
+        );
     }
 }
