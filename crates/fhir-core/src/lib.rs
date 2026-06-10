@@ -615,6 +615,19 @@ mod tests {
     }
 
     #[test]
+    fn today_and_now() {
+        assert_eq!(ev1(PATIENT, "today() = today()"), Value::Boolean(true));
+        assert!(matches!(ev1(PATIENT, "today()"), Value::Date(_)));
+        assert!(matches!(ev1(PATIENT, "now()"), Value::DateTime(_)));
+        assert_eq!(ev1(PATIENT, "birthDate <= today()"), Value::Boolean(true));
+        // the clock plays with the calendar module
+        assert_eq!(
+            ev1(PATIENT, "today() < today() + 1 day"),
+            Value::Boolean(true)
+        );
+    }
+
+    #[test]
     fn iif_and_tree_functions() {
         assert_eq!(
             ev1(PATIENT, "iif(active, 'yes', 'no')"),
