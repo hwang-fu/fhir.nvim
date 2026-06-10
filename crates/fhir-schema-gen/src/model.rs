@@ -48,6 +48,10 @@ pub fn parse_structure_definition(sd: &Value) -> Option<TypeModel> {
     if sd.get("abstract").and_then(Value::as_bool) == Some(true) {
         return None;
     }
+    // constraint profiles (e.g. SimpleQuantity) restate a base type, not define one
+    if sd.get("derivation").and_then(Value::as_str) == Some("constraint") {
+        return None;
+    }
     let name = sd.get("type")?.as_str()?.to_string();
     let kind = sd.get("kind")?.as_str()?.to_string();
     let rows = sd.get("snapshot")?.get("element")?.as_array()?;
@@ -153,6 +157,18 @@ mod tests {
         assert_eq!(ty.constraints.len(), 1);
         assert_eq!(ty.constraints[0].key, "dem-1");
         assert_eq!(ty.constraints[0].path, ""); // root-level constraint
+    }
+
+    #[test]
+    fn skips_constraint_profiles() {
+        // e.g. SimpleQuantity: a profile on Quantity, not a type of its own
+        let sd: serde_json::Value = serde_json::from_str(
+            r#"{"resourceType":"StructureDefinition","name":"SimpleQuantity","kind":"complex-type",
+                "type":"Quantity","derivation":"constraint",
+                "snapshot":{"element":[{"path":"Quantity","min":0,"max":"*"}]}}"#,
+        )
+        .unwrap();
+        assert!(parse_structure_definition(&sd).is_none());
     }
 
     #[test]
