@@ -350,6 +350,8 @@ pub fn call(
             }
             Ok(out)
         }
+        ("today", []) => Ok(vec![Value::Date(crate::temporal::today_utc())]),
+        ("now", []) => Ok(vec![Value::DateTime(crate::temporal::now_utc())]),
         _ => Err(Error::Eval(format!("unknown function: {name}"))),
     }
 }
