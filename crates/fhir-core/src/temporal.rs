@@ -1,5 +1,3 @@
-#![allow(dead_code)] // not yet wired into the public API
-
 //! Calendar arithmetic over FHIRPath's partial-precision date/dateTime text
 //! forms. Pure text-in/text-out: precision is preserved, month/year addition
 //! clamps to the end of the target month, time units carry across days, and
