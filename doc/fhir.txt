@@ -116,10 +116,10 @@ The feature commands are buffer-local: they exist only in attached buffers.
 
 :FhirEval [{expr}]                                                *:FhirEval*
         Evaluate the FHIRPath expression {expr} against the resource under
-        the cursor and show the result in a floating window (`q` or `<Esc>`
-        closes it). Without {expr}, prompts for one. Requires the native
-        engine (see |fhir-requirements|); without it a notice explains how
-        to build it.
+        the cursor and show the result in a floating window titled with that
+        resource's identity (`q`, `<Esc>`, or leaving the window closes it).
+        Without {expr}, prompts for one. Requires the native engine (see
+        |fhir-requirements|); without it a notice explains how to build it.
 
 :FhirEnable                                                      *:FhirEnable*
         Attach fhir.nvim to the current buffer. Useful when `detection` is
