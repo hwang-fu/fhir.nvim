@@ -1,0 +1,8 @@
+# The native module leaves the Lua C-API symbols undefined; the host editor
+# provides them at load time. Linux linkers allow that by default, macOS's
+# ld64 must be told explicitly.
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]
+
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]
