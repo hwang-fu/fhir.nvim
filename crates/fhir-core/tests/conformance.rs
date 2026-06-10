@@ -7,7 +7,7 @@ use std::fs;
 use std::path::Path;
 
 /// Raise to the measured rate (rounded down) whenever it improves.
-const RATE_FLOOR: f64 = 0.26;
+const RATE_FLOOR: f64 = 0.54;
 
 fn expected_value(ty: &str, text: &str) -> Value {
     match ty {
