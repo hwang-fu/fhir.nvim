@@ -79,7 +79,7 @@ pub(crate) fn matches_type(v: &Value, name: &str) -> bool {
 }
 
 // YYYY, YYYY-MM, or YYYY-MM-DD
-fn looks_like_date(s: &str) -> bool {
+pub(crate) fn looks_like_date(s: &str) -> bool {
     matches!(s.len(), 4 | 7 | 10)
         && s.bytes().enumerate().all(|(i, b)| match i {
             4 | 7 => b == b'-',
@@ -87,7 +87,7 @@ fn looks_like_date(s: &str) -> bool {
         })
 }
 
-fn looks_like_datetime(s: &str) -> bool {
+pub(crate) fn looks_like_datetime(s: &str) -> bool {
     s.len() > 10 && looks_like_date(&s[..10]) && s.as_bytes()[10] == b'T'
 }
 
