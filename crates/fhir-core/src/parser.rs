@@ -5,16 +5,23 @@ use crate::lexer::{Token, tokenize};
 enum Op {
     Bin(BinOp),
     Type(TypeOp),
+    // `a contains b` is `b in a`
+    ContainsRev,
 }
 
 // binding powers, loosest first (FHIRPath precedence)
 fn operator(t: &Token) -> Option<(Op, u8)> {
     match t {
+        Token::Implies => Some((Op::Bin(BinOp::Implies), 0)),
         Token::Or => Some((Op::Bin(BinOp::Or), 1)),
+        Token::Xor => Some((Op::Bin(BinOp::Xor), 1)),
         Token::And => Some((Op::Bin(BinOp::And), 2)),
         Token::In => Some((Op::Bin(BinOp::In), 3)),
+        Token::Contains => Some((Op::ContainsRev, 3)),
         Token::Eq => Some((Op::Bin(BinOp::Eq), 4)),
         Token::Ne => Some((Op::Bin(BinOp::Ne), 4)),
+        Token::Tilde => Some((Op::Bin(BinOp::Equiv), 4)),
+        Token::NotTilde => Some((Op::Bin(BinOp::NotEquiv), 4)),
         Token::Lt => Some((Op::Bin(BinOp::Lt), 5)),
         Token::Le => Some((Op::Bin(BinOp::Le), 5)),
         Token::Gt => Some((Op::Bin(BinOp::Gt), 5)),
@@ -22,7 +29,13 @@ fn operator(t: &Token) -> Option<(Op, u8)> {
         Token::Pipe => Some((Op::Bin(BinOp::Union), 6)),
         Token::Is => Some((Op::Type(TypeOp::Is), 7)),
         Token::As => Some((Op::Type(TypeOp::As), 7)),
+        Token::Plus => Some((Op::Bin(BinOp::Add), 8)),
+        Token::Minus => Some((Op::Bin(BinOp::Sub), 8)),
         Token::Amp => Some((Op::Bin(BinOp::Concat), 8)),
+        Token::Star => Some((Op::Bin(BinOp::Mul), 9)),
+        Token::Slash => Some((Op::Bin(BinOp::Div), 9)),
+        Token::Div => Some((Op::Bin(BinOp::IntDiv), 9)),
+        Token::Mod => Some((Op::Bin(BinOp::Mod), 9)),
         _ => None,
     }
 }
@@ -85,6 +98,11 @@ impl Parser {
                     op,
                     expr: Box::new(lhs),
                     type_name: self.parse_type_name()?,
+                },
+                Op::ContainsRev => Expr::Binary {
+                    op: BinOp::In,
+                    lhs: Box::new(self.parse_expr(bp + 1)?),
+                    rhs: Box::new(lhs),
                 },
             };
         }
@@ -160,13 +178,20 @@ impl Parser {
             Some(Token::Date(s)) => Ok(Expr::Literal(Literal::Date(s))),
             Some(Token::DateTime(s)) => Ok(Expr::Literal(Literal::DateTime(s))),
             Some(Token::DollarThis) => Ok(Expr::This),
-            Some(Token::Minus) => match self.next() {
-                Some(Token::Int(n)) => Ok(Expr::Literal(Literal::Integer(-n))),
-                Some(Token::Dec(d)) => Ok(Expr::Literal(Literal::Decimal(-d))),
-                other => Err(Error::Parse(format!(
-                    "expected number after '-', got {other:?}"
-                ))),
+            Some(Token::Minus) => match self.peek() {
+                Some(Token::Int(_)) | Some(Token::Dec(_)) => match self.next() {
+                    Some(Token::Int(n)) => Ok(Expr::Literal(Literal::Integer(-n))),
+                    Some(Token::Dec(d)) => Ok(Expr::Literal(Literal::Decimal(-d))),
+                    _ => unreachable!(),
+                },
+                // general polarity desugars to 0 - expr (empty propagates)
+                _ => Ok(Expr::Binary {
+                    op: BinOp::Sub,
+                    lhs: Box::new(Expr::Literal(Literal::Integer(0))),
+                    rhs: Box::new(self.parse_expr(10)?),
+                }),
             },
+            Some(Token::Plus) => self.parse_expr(10),
             Some(Token::Ident(name)) => {
                 if self.peek() == Some(&Token::LParen) {
                     self.next();
@@ -217,6 +242,11 @@ fn member_name(t: Token) -> Result<String, Error> {
         Token::In => Ok("in".into()),
         Token::Is => Ok("is".into()),
         Token::As => Ok("as".into()),
+        Token::Xor => Ok("xor".into()),
+        Token::Implies => Ok("implies".into()),
+        Token::Div => Ok("div".into()),
+        Token::Mod => Ok("mod".into()),
+        Token::Contains => Ok("contains".into()),
         Token::True => Ok("true".into()),
         Token::False => Ok("false".into()),
         other => Err(Error::Parse(format!("expected member name, got {other:?}"))),
@@ -361,6 +391,52 @@ mod tests {
         assert_eq!(
             parse("a | b | c").unwrap(),
             bin(BinOp::Union, bin(BinOp::Union, id("a"), id("b")), id("c"))
+        );
+    }
+
+    #[test]
+    fn arithmetic_precedence() {
+        // multiplicative binds tighter than additive
+        assert_eq!(
+            parse("a + b * c").unwrap(),
+            bin(BinOp::Add, id("a"), bin(BinOp::Mul, id("b"), id("c")))
+        );
+        // additive binds tighter than comparison
+        assert_eq!(
+            parse("a + b < c").unwrap(),
+            bin(BinOp::Lt, bin(BinOp::Add, id("a"), id("b")), id("c"))
+        );
+        // unary minus on an expression desugars to 0 - expr
+        assert_eq!(
+            parse("-a").unwrap(),
+            bin(BinOp::Sub, Expr::Literal(Literal::Integer(0)), id("a"))
+        );
+        // the literal fast-path still folds
+        assert_eq!(parse("-3").unwrap(), Expr::Literal(Literal::Integer(-3)));
+        // contains desugars to in with swapped operands
+        assert_eq!(
+            parse("a contains b").unwrap(),
+            bin(BinOp::In, id("b"), id("a"))
+        );
+        // div/mod/contains are still valid member names
+        assert_eq!(
+            parse("text.div").unwrap(),
+            Expr::Member {
+                base: Box::new(id("text")),
+                name: "div".into()
+            }
+        );
+        // the string function form still parses as a call
+        assert!(matches!(
+            parse("name.contains('x')").unwrap(),
+            Expr::Call { .. }
+        ));
+        assert_eq!(parse("a xor b").unwrap(), bin(BinOp::Xor, id("a"), id("b")));
+        assert_eq!(parse("a ~ b").unwrap(), bin(BinOp::Equiv, id("a"), id("b")));
+        // implies is the loosest binder
+        assert_eq!(
+            parse("a implies b or c").unwrap(),
+            bin(BinOp::Implies, id("a"), bin(BinOp::Or, id("b"), id("c")))
         );
     }
 
