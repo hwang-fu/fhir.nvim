@@ -160,6 +160,7 @@ version = "0.1.0"
 dependencies = [
  "fhir-core",
  "mlua",
+ "serde_json",
 ]
 
 [[package]]
