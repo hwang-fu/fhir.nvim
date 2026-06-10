@@ -76,7 +76,7 @@ jobs:
         run: cargo build -p fhir-core-lua
 
       - name: cargo test
-        run: cargo test -p fhir-core
+        run: cargo test -p fhir-core -p fhir-schema-gen
 
       - name: cargo clippy
         run: cargo clippy -p fhir-core -- -D warnings
