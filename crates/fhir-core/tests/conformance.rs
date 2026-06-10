@@ -7,7 +7,7 @@ use std::fs;
 use std::path::Path;
 
 /// Raise to the measured rate (rounded down) whenever it improves.
-const RATE_FLOOR: f64 = 0.54;
+const RATE_FLOOR: f64 = 0.57;
 
 fn expected_value(ty: &str, text: &str) -> Value {
     match ty {
@@ -74,7 +74,10 @@ fn conformance_suite() {
                         .children()
                         .filter(|n| n.has_tag_name("output"))
                         .map(|o| {
-                            expected_value(o.attribute("type").unwrap_or(""), o.text().unwrap_or(""))
+                            expected_value(
+                                o.attribute("type").unwrap_or(""),
+                                o.text().unwrap_or(""),
+                            )
                         })
                         .collect();
                     if predicate {
