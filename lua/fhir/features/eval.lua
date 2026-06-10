@@ -67,7 +67,11 @@ function M.run(expr)
   if #lines == 0 then
     lines = { "(empty)" }
   end
-  ui.float(lines, { ft = "json" })
+  local title = res.resource_type or "resource"
+  if res.id then
+    title = title .. "/" .. res.id
+  end
+  ui.float(lines, { ft = "json", title = title })
 end
 
 return M
