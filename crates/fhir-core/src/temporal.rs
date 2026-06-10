@@ -3,6 +3,8 @@
 //! clamps to the end of the target month, time units carry across days, and
 //! any timezone suffix passes through untouched.
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 
@@ -162,8 +164,8 @@ pub(crate) fn add(text: &str, amount: Decimal, unit: &str) -> Option<String> {
             let mi = p.fields.get(4).copied().unwrap_or(0);
             let ss = p.fields.get(5).copied().unwrap_or(0);
             let total = p.fields[3] * 3600 + mi * 60 + ss + n * per;
-            let days = days_from_civil(p.fields[0], p.fields[1], p.fields[2])
-                + total.div_euclid(86400);
+            let days =
+                days_from_civil(p.fields[0], p.fields[1], p.fields[2]) + total.div_euclid(86400);
             let tod = total.rem_euclid(86400);
             let (y, m, d) = civil_from_days(days);
             (p.fields[0], p.fields[1], p.fields[2]) = (y, m, d);
@@ -181,6 +183,30 @@ pub(crate) fn add(text: &str, amount: Decimal, unit: &str) -> Option<String> {
         p.fields[2] = p.fields[2].min(days_in_month(p.fields[0], p.fields[1]));
     }
     Some(render(&p))
+}
+
+fn epoch_seconds() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+pub(crate) fn today_utc() -> String {
+    let (y, m, d) = civil_from_days(epoch_seconds().div_euclid(86400));
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
+pub(crate) fn now_utc() -> String {
+    let secs = epoch_seconds();
+    let (y, m, d) = civil_from_days(secs.div_euclid(86400));
+    let tod = secs.rem_euclid(86400);
+    format!(
+        "{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z",
+        tod / 3600,
+        (tod % 3600) / 60,
+        tod % 60
+    )
 }
 
 #[cfg(test)]
