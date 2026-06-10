@@ -219,7 +219,12 @@ fn numbers(a: &Value, b: &Value) -> Option<(Decimal, Decimal, bool)> {
 fn equivalent(a: &Value, b: &Value) -> bool {
     match (a, b) {
         (Value::String(x), Value::String(y)) => {
-            let norm = |s: &str| s.to_lowercase().split_whitespace().collect::<Vec<_>>().join(" ");
+            let norm = |s: &str| {
+                s.to_lowercase()
+                    .split_whitespace()
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            };
             norm(x) == norm(y)
         }
         _ => a == b,
@@ -277,6 +282,10 @@ fn literal_value(lit: &Literal) -> Value {
         Literal::Str(s) => Value::String(s.clone()),
         Literal::Date(s) => Value::Date(s.clone()),
         Literal::DateTime(s) => Value::DateTime(s.clone()),
+        Literal::Quantity(d, u) => Value::Quantity {
+            value: *d,
+            unit: u.clone(),
+        },
     }
 }
 
