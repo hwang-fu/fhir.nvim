@@ -33,9 +33,10 @@ throws on malformed input.
   |:checkhealth| reports whether it is present.
 - Optional: `dressing.nvim` or `telescope-ui-select` give |vim.ui.select| a
   fuzzy picker, which the outline and find-usages lists use.
-- Optional: the native FHIRPath engine powers |:FhirEval|. Build it from the
-  plugin directory with `make build` (needs a Rust toolchain). Everything
-  else works without it.
+- Optional: the native FHIRPath engine powers |:FhirEval|. Get it with
+  |:FhirFetchEngine| (prebuilt for linux/macos, x86_64/aarch64), or build it
+  from the plugin directory with `make build` (needs a Rust toolchain).
+  Everything else works without it.
 
 ==============================================================================
 3. Installation                                          *fhir-installation*
@@ -91,11 +92,16 @@ keymaps                         table (default {})
             })
 <
                                                               *fhir-opt-native*
-native                          table (default {})
+native                          table
         Settings for the native FHIRPath engine.
-          dir    Directory containing the built `fhir_core` module. Defaults
-                 to the plugin's own `.tests/` directory, where `make build`
-                 places it.
+          dir    Explicit directory containing the `fhir_core` module
+                 (unset by default). When unset, the loader searches the
+                 downloaded engine for the pinned `tag` (in Neovim's data
+                 directory), then the plugin's own `.tests/` directory
+                 (where `make build` places a source build).
+          tag    The engine release |:FhirFetchEngine| installs and the
+                 loader looks for. Defaults to the release matching the
+                 plugin version.
 ==============================================================================
 5. Commands                                                  *fhir-commands*
 
@@ -125,6 +131,14 @@ The feature commands are buffer-local: they exist only in attached buffers.
         Attach fhir.nvim to the current buffer. Useful when `detection` is
         "manual", or for a buffer auto-detection skipped. This is a global
         command.
+
+:FhirFetchEngine [{tag}]                                    *:FhirFetchEngine*
+        Download the prebuilt FHIRPath engine for this machine from the
+        GitHub release {tag} (default: the pinned `native.tag`), verify it
+        against the release's SHA-256 checksums, and install it into
+        Neovim's data directory. Prebuilts cover linux/macos on
+        x86_64/aarch64; elsewhere a notice points at `make build`. This is
+        a global command.
 
 :FhirDisable                                                     *:FhirDisable*
         Detach fhir.nvim from the current buffer: remove its commands,
