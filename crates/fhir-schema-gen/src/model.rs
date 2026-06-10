@@ -28,6 +28,7 @@ pub struct ConstraintModel {
     pub expression: String,
 }
 
+#[cfg(test)]
 impl TypeModel {
     pub fn element(&self, path: &str) -> Option<&ElementModel> {
         self.elements.iter().find(|e| e.path == path)
