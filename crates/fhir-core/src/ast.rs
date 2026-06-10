@@ -56,6 +56,16 @@ pub enum BinOp {
     In,
     Union,
     Concat,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    IntDiv,
+    Mod,
+    Xor,
+    Implies,
+    Equiv,
+    NotEquiv,
 }
 
 #[allow(dead_code)]
