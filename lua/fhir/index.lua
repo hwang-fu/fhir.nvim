@@ -19,6 +19,9 @@ local function classify_flavor(raw)
   return "unknown"
 end
 
+-- Public: the eval feature classifies raw reference strings with it.
+M.flavor = classify_flavor
+
 local function location(node, bufnr)
   local srow, scol, erow, ecol = node:range()
   return { bufnr = bufnr, range = { srow, scol, erow, ecol } }
