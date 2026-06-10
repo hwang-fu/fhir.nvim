@@ -126,6 +126,90 @@ pub fn call(
                 "single() on a collection with more than one value".into(),
             )),
         },
+        ("length", []) => map_str(input, |s| Value::Integer(s.chars().count() as i64)),
+        ("upper", []) => map_str(input, |s| Value::String(s.to_uppercase())),
+        ("lower", []) => map_str(input, |s| Value::String(s.to_lowercase())),
+        ("trim", []) => map_str(input, |s| Value::String(s.trim().to_string())),
+        ("startsWith", [p]) => {
+            let p = string_arg(p, focus, ctx)?;
+            map_str(input, |s| Value::Boolean(s.starts_with(&p)))
+        }
+        ("endsWith", [p]) => {
+            let p = string_arg(p, focus, ctx)?;
+            map_str(input, |s| Value::Boolean(s.ends_with(&p)))
+        }
+        ("contains", [p]) => {
+            let p = string_arg(p, focus, ctx)?;
+            map_str(input, |s| Value::Boolean(s.contains(&p)))
+        }
+        ("indexOf", [p]) => {
+            let p = string_arg(p, focus, ctx)?;
+            map_str(input, |s| match s.find(&p) {
+                // char position, not byte position
+                Some(byte) => Value::Integer(s[..byte].chars().count() as i64),
+                None => Value::Integer(-1),
+            })
+        }
+        ("replace", [from, to]) => {
+            let from = string_arg(from, focus, ctx)?;
+            let to = string_arg(to, focus, ctx)?;
+            map_str(input, |s| Value::String(s.replace(&from, &to)))
+        }
+        ("substring", [start]) | ("substring", [start, _]) => {
+            let begin = int_arg(start, focus, ctx)?;
+            let length = match args {
+                [_, l] => Some(int_arg(l, focus, ctx)?),
+                _ => None,
+            };
+            let Some(s) = string_input(input)? else {
+                return Ok(vec![]);
+            };
+            let chars: Vec<char> = s.chars().collect();
+            if begin < 0 || begin as usize >= chars.len() {
+                return Ok(vec![]);
+            }
+            let begin = begin as usize;
+            let end = match length {
+                Some(l) => (begin + l.max(0) as usize).min(chars.len()),
+                None => chars.len(),
+            };
+            Ok(vec![Value::String(chars[begin..end].iter().collect())])
+        }
+        ("split", [sep]) => {
+            let sep = string_arg(sep, focus, ctx)?;
+            Ok(match string_input(input)? {
+                None => vec![],
+                Some(s) => s.split(&sep).map(|p| Value::String(p.to_string())).collect(),
+            })
+        }
+        ("toChars", []) => Ok(match string_input(input)? {
+            None => vec![],
+            Some(s) => s.chars().map(|c| Value::String(c.to_string())).collect(),
+        }),
+        ("join", [sep]) => {
+            let sep = string_arg(sep, focus, ctx)?;
+            let mut parts = Vec::new();
+            for v in input {
+                match v {
+                    Value::String(s) | Value::Date(s) | Value::DateTime(s) => {
+                        parts.push(s.as_str())
+                    }
+                    other => {
+                        return Err(Error::Eval(format!("join expects strings, got {other:?}")));
+                    }
+                }
+            }
+            Ok(vec![Value::String(parts.join(&sep))])
+        }
+        ("matches", [p]) => {
+            let re = regex_arg(p, focus, ctx)?;
+            map_str(input, |s| Value::Boolean(re.is_match(s)))
+        }
+        ("replaceMatches", [p, to]) => {
+            let re = regex_arg(p, focus, ctx)?;
+            let to = string_arg(to, focus, ctx)?;
+            map_str(input, |s| Value::String(re.replace_all(s, to.as_str()).into_owned()))
+        }
         _ => Err(Error::Eval(format!("unknown function: {name}"))),
     }
 }
@@ -138,6 +222,29 @@ fn int_arg(expr: &Expr, focus: &[Value], ctx: &Ctx) -> Result<i64, Error> {
             "expected a single integer argument, got {other:?}"
         ))),
     }
+}
+
+// singleton string-ish input (dates pass as their text); empty stays empty
+fn string_input(input: &[Value]) -> Result<Option<&str>, Error> {
+    match eval::singleton(input)? {
+        None => Ok(None),
+        Some(Value::String(s)) | Some(Value::Date(s)) | Some(Value::DateTime(s)) => {
+            Ok(Some(s.as_str()))
+        }
+        Some(other) => Err(Error::Eval(format!("expected a string, got {other:?}"))),
+    }
+}
+
+fn map_str(input: &[Value], f: impl Fn(&str) -> Value) -> Result<Vec<Value>, Error> {
+    Ok(match string_input(input)? {
+        None => vec![],
+        Some(s) => vec![f(s)],
+    })
+}
+
+fn regex_arg(expr: &Expr, focus: &[Value], ctx: &Ctx) -> Result<regex_lite::Regex, Error> {
+    let pattern = string_arg(expr, focus, ctx)?;
+    regex_lite::Regex::new(&pattern).map_err(|e| Error::Eval(format!("bad regex: {e}")))
 }
 
 fn string_arg(expr: &Expr, focus: &[Value], ctx: &Ctx) -> Result<String, Error> {
