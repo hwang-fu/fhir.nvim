@@ -8,7 +8,8 @@ use rust_decimal::prelude::ToPrimitive;
 
 use crate::ast::{BinOp, Expr, Literal, TypeOp};
 use crate::error::Error;
-use crate::value::{Value, from_json, matches_type};
+use crate::temporal;
+use crate::value::{Value, as_quantity, from_json, matches_type};
 
 pub(crate) struct Ctx<'a> {
     pub resolver: Option<&'a dyn crate::Resolve>,
@@ -92,6 +93,20 @@ fn binary(op: BinOp, lhs: Vec<Value>, rhs: Vec<Value>) -> Result<Vec<Value>, Err
             if lhs.is_empty() || rhs.is_empty() {
                 return Ok(vec![]);
             }
+            if let ([a], [b]) = (lhs.as_slice(), rhs.as_slice())
+                && let (Some((x, ux)), Some((y, uy))) = (as_quantity(a), as_quantity(b))
+            {
+                if ux != uy {
+                    // mismatched units are unknown, not unequal
+                    return Ok(vec![]);
+                }
+                let equal = x == y;
+                return Ok(vec![Value::Boolean(if op == BinOp::Eq {
+                    equal
+                } else {
+                    !equal
+                })]);
+            }
             let equal = lhs.len() == rhs.len() && lhs.iter().zip(&rhs).all(|(a, b)| a == b);
             Value::Boolean(if op == BinOp::Eq { equal } else { !equal })
         }
@@ -99,6 +114,18 @@ fn binary(op: BinOp, lhs: Vec<Value>, rhs: Vec<Value>) -> Result<Vec<Value>, Err
             let (Some(a), Some(b)) = (singleton(&lhs)?, singleton(&rhs)?) else {
                 return Ok(vec![]);
             };
+            if let (Some((x, ux)), Some((y, uy))) = (as_quantity(a), as_quantity(b)) {
+                if ux != uy {
+                    return Ok(vec![]);
+                }
+                let ord = x.cmp(&y);
+                return Ok(vec![Value::Boolean(match op {
+                    BinOp::Lt => ord == Ordering::Less,
+                    BinOp::Le => ord != Ordering::Greater,
+                    BinOp::Gt => ord == Ordering::Greater,
+                    _ => ord != Ordering::Less,
+                })]);
+            }
             let ord = compare(a, b)?;
             Value::Boolean(match op {
                 BinOp::Lt => ord == Ordering::Less,
@@ -148,6 +175,51 @@ fn binary(op: BinOp, lhs: Vec<Value>, rhs: Vec<Value>) -> Result<Vec<Value>, Err
             let (Some(a), Some(b)) = (singleton(&lhs)?, singleton(&rhs)?) else {
                 return Ok(vec![]);
             };
+            // date/dateTime +/- duration via the calendar module
+            if matches!(op, BinOp::Add | BinOp::Sub)
+                && let Some(text) = match a {
+                    Value::Date(s) | Value::DateTime(s) => Some(s),
+                    _ => None,
+                }
+                && let Some((amount, unit)) = as_quantity(b)
+            {
+                let amount = if op == BinOp::Sub { -amount } else { amount };
+                let is_dt = matches!(a, Value::DateTime(_));
+                return Ok(match temporal::add(text, amount, &unit) {
+                    Some(r) if is_dt => vec![Value::DateTime(r)],
+                    Some(r) => vec![Value::Date(r)],
+                    None => vec![],
+                });
+            }
+            // same-unit quantity addition; mismatched units are empty
+            if let (Some((x, ux)), Some((y, uy))) = (as_quantity(a), as_quantity(b)) {
+                return Ok(match op {
+                    BinOp::Add | BinOp::Sub if ux == uy => {
+                        let v = if op == BinOp::Add { x + y } else { x - y };
+                        vec![Value::Quantity { value: v, unit: ux }]
+                    }
+                    _ => vec![],
+                });
+            }
+            // a quantity scaled by a number
+            if matches!(op, BinOp::Mul | BinOp::Div)
+                && let Some(((qv, unit), other, q_is_lhs)) = as_quantity(a)
+                    .map(|q| (q, b, true))
+                    .or_else(|| as_quantity(b).map(|q| (q, a, false)))
+                && let Some(n) = num_of(other)
+            {
+                return Ok(match op {
+                    BinOp::Mul => vec![Value::Quantity {
+                        value: qv * n,
+                        unit,
+                    }],
+                    _ if q_is_lhs => match qv.checked_div(n) {
+                        Some(v) => vec![Value::Quantity { value: v, unit }],
+                        None => vec![],
+                    },
+                    _ => vec![],
+                });
+            }
             // + also concatenates strings (with empty propagation, unlike &)
             if op == BinOp::Add
                 && let (Value::String(x), Value::String(y)) = (a, b)
@@ -202,6 +274,14 @@ fn binary(op: BinOp, lhs: Vec<Value>, rhs: Vec<Value>) -> Result<Vec<Value>, Err
         }
     };
     Ok(vec![result])
+}
+
+fn num_of(v: &Value) -> Option<Decimal> {
+    match v {
+        Value::Integer(i) => Some(Decimal::from(*i)),
+        Value::Decimal(d) => Some(*d),
+        _ => None,
+    }
 }
 
 fn numbers(a: &Value, b: &Value) -> Option<(Decimal, Decimal, bool)> {
