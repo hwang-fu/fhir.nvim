@@ -390,4 +390,47 @@ mod tests {
             r#"["p1"]"#
         );
     }
+
+    #[test]
+    fn arithmetic_operators() {
+        assert_eq!(ev1(PATIENT, "2 + 2"), Value::Integer(4));
+        assert_eq!(ev1(PATIENT, "2 + 2.5"), Value::Decimal("4.5".parse().unwrap()));
+        assert_eq!(ev1(PATIENT, "5 - 7"), Value::Integer(-2));
+        assert_eq!(ev1(PATIENT, "3 * 3"), Value::Integer(9));
+        // / always yields a decimal; div is integer division
+        assert_eq!(ev1(PATIENT, "5 / 2"), Value::Decimal("2.5".parse().unwrap()));
+        assert_eq!(ev1(PATIENT, "5 div 2"), Value::Integer(2));
+        assert_eq!(ev1(PATIENT, "5 mod 2"), Value::Integer(1));
+        // division by zero is empty, not an error
+        assert!(ev(PATIENT, "5 / 0").is_empty());
+        assert!(ev(PATIENT, "5 div 0").is_empty());
+        // + concatenates strings, empty propagates (unlike &)
+        assert_eq!(ev1(PATIENT, "'a' + 'b'"), Value::String("ab".into()));
+        assert!(ev(PATIENT, "name[9].family + 'x'").is_empty());
+        // unary minus on an expression
+        assert_eq!(ev1(PATIENT, "-(2 + 3)"), Value::Integer(-5));
+    }
+
+    #[test]
+    fn logic_and_equivalence_operators() {
+        assert_eq!(ev1(PATIENT, "true xor false"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "true xor true"), Value::Boolean(false));
+        assert_eq!(ev1(PATIENT, "false implies false"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "true implies false"), Value::Boolean(false));
+        // false implies anything (even empty) is true
+        assert_eq!(
+            ev1(PATIENT, "(1 = 2) implies (name[9].family = 'x')"),
+            Value::Boolean(true)
+        );
+        // equivalence: empty ~ empty is true; = would be empty
+        assert_eq!(ev1(PATIENT, "nothing ~ alsonothing"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "1 ~ 1"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "'ABC' ~ 'abc'"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "'a' !~ 'b'"), Value::Boolean(true));
+        // contains is in, reversed
+        assert_eq!(
+            ev1(PATIENT, "name.given contains 'Jim'"),
+            Value::Boolean(true)
+        );
+    }
 }
