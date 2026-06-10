@@ -29,4 +29,9 @@ function M.outline()
   require("fhir.features.outline").run()
 end
 
+-- Public API: evaluate a FHIRPath expression (prompts when expr is nil).
+function M.eval(expr)
+  require("fhir.features.eval").run(expr)
+end
+
 return M
