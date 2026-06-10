@@ -41,6 +41,19 @@ pub fn from_json(v: &serde_json::Value) -> Vec<Value> {
     }
 }
 
+// renders a value back to JSON; decimals go through their text form so the
+// exact digits survive (0.10 stays 0.10, no f64 round trip)
+pub(crate) fn to_json(v: &Value) -> serde_json::Value {
+    match v {
+        Value::Boolean(b) => (*b).into(),
+        Value::Integer(i) => (*i).into(),
+        Value::Decimal(d) => serde_json::from_str(&d.to_string())
+            .expect("a decimal's text form is valid json"),
+        Value::String(s) | Value::Date(s) | Value::DateTime(s) => s.clone().into(),
+        Value::Complex { data, .. } => serde_json::Value::Object(data.clone()),
+    }
+}
+
 // `System.`-qualified and FHIR type names match case-insensitively; JSON cannot
 // distinguish FHIR string flavors, so code/uri/id are accepted as strings
 pub(crate) fn matches_type(v: &Value, name: &str) -> bool {
