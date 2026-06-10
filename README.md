@@ -104,7 +104,7 @@ FHIRPath conformance suite** (vendored under
 ratcheting pass-rate floor. *Conformance* means how faithfully an
 implementation matches the behavior the spec requires; the suite - 935
 input/expression/expected-output cases published with the spec - turns that
-into a measurable score. Current rate: **54.9% (514/935)**.
+into a measurable score. Current rate: **57.2% (535/935)**.
 
 Covered so far: path navigation and indexing; boolean/string/integer/decimal/
 date/dateTime literals; equality, comparison, and `~` equivalence; arithmetic
@@ -118,12 +118,14 @@ date/dateTime literals; equality, comparison, and `~` equivalence; arithmetic
 functions (`abs`, `ceiling`, `floor`, `round`, `truncate`, `sqrt`, `exp`,
 `ln`, `log`, `power`); conversions (`toString`/`toInteger`/`toDecimal`/
 `toBoolean` and their `convertsToX` twins); `iif` (lazy), `children`,
-`descendants`, `repeat`; `extension(url)`; `resolve()` via a pluggable
-resolver trait.
+`descendants`, `repeat`; quantity literals (`1 year`, `5 'mg'`) with
+same-unit arithmetic and comparison (including against FHIR Quantity
+values); date/dateTime arithmetic with calendar durations (precision
+preserved, end-of-month clamped); `today()`/`now()`; `extension(url)`;
+`resolve()` via a pluggable resolver trait.
 
-Not covered yet: date/dateTime/quantity arithmetic and quantity literals
-(planned for a future release), `%variables`, type reflection, strict
-choice-element typing rules, and terminology functions.
+Not covered yet: unit conversion (UCUM), `%variables`, type reflection,
+strict choice-element typing rules, and terminology functions.
 
 ## Roadmap
 
