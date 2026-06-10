@@ -283,6 +283,70 @@ pub fn call(
                 }
             })
         }
+        ("toString", []) => conv(input, to_string_value),
+        ("toInteger", []) => conv(input, to_integer),
+        ("toDecimal", []) => conv(input, to_decimal),
+        ("toBoolean", []) => conv(input, to_boolean),
+        ("convertsToString", []) => conv_check(input, to_string_value),
+        ("convertsToInteger", []) => conv_check(input, to_integer),
+        ("convertsToDecimal", []) => conv_check(input, to_decimal),
+        ("convertsToBoolean", []) => conv_check(input, to_boolean),
+        ("convertsToDate", []) => conv_check(input, |v| match v {
+            Value::Date(_) => Some(v.clone()),
+            Value::String(s) if crate::value::looks_like_date(s) => Some(v.clone()),
+            _ => None,
+        }),
+        ("convertsToDateTime", []) => conv_check(input, |v| match v {
+            Value::DateTime(_) => Some(v.clone()),
+            Value::String(s) if crate::value::looks_like_datetime(s) => Some(v.clone()),
+            _ => None,
+        }),
+        // lazy by construction: only the chosen branch is ever evaluated
+        ("iif", [cond, then]) | ("iif", [cond, then, _]) => {
+            let chosen = match eval::boolean_of(&eval::eval(cond, input, ctx)?)? {
+                Some(true) => Some(then),
+                _ => match args {
+                    [_, _, otherwise] => Some(otherwise),
+                    _ => None,
+                },
+            };
+            match chosen {
+                Some(branch) => eval::eval(branch, input, ctx),
+                None => Ok(vec![]),
+            }
+        }
+        ("children", []) => Ok(children_of(input)),
+        ("descendants", []) => {
+            let mut all = Vec::new();
+            let mut frontier = children_of(input);
+            while !frontier.is_empty() {
+                let next = children_of(&frontier);
+                all.extend(frontier);
+                frontier = next;
+            }
+            Ok(all)
+        }
+        // apply the projection to the newest results until nothing new appears
+        ("repeat", [projection]) => {
+            let mut out: Vec<Value> = Vec::new();
+            let mut frontier: Vec<Value> = input.to_vec();
+            loop {
+                let mut fresh = Vec::new();
+                for item in &frontier {
+                    for v in eval::eval(projection, std::slice::from_ref(item), ctx)? {
+                        if !out.contains(&v) && !fresh.contains(&v) {
+                            fresh.push(v);
+                        }
+                    }
+                }
+                if fresh.is_empty() {
+                    break;
+                }
+                out.extend(fresh.iter().cloned());
+                frontier = fresh;
+            }
+            Ok(out)
+        }
         _ => Err(Error::Eval(format!("unknown function: {name}"))),
     }
 }
@@ -333,6 +397,77 @@ fn number_arg(expr: &Expr, focus: &[Value], ctx: &Ctx) -> Result<(Decimal, bool)
             "expected a single numeric argument, got {other:?}"
         ))),
     }
+}
+
+fn to_string_value(v: &Value) -> Option<Value> {
+    match v {
+        Value::String(_) => Some(v.clone()),
+        Value::Date(s) | Value::DateTime(s) => Some(Value::String(s.clone())),
+        Value::Integer(i) => Some(Value::String(i.to_string())),
+        Value::Decimal(d) => Some(Value::String(d.to_string())),
+        Value::Boolean(b) => Some(Value::String(b.to_string())),
+        Value::Complex { .. } => None,
+    }
+}
+
+fn to_integer(v: &Value) -> Option<Value> {
+    match v {
+        Value::Integer(_) => Some(v.clone()),
+        Value::String(s) => s.parse::<i64>().ok().map(Value::Integer),
+        Value::Boolean(b) => Some(Value::Integer(i64::from(*b))),
+        _ => None,
+    }
+}
+
+fn to_decimal(v: &Value) -> Option<Value> {
+    match v {
+        Value::Decimal(_) => Some(v.clone()),
+        Value::Integer(i) => Some(Value::Decimal(Decimal::from(*i))),
+        Value::String(s) => s.parse::<Decimal>().ok().map(Value::Decimal),
+        Value::Boolean(b) => Some(Value::Decimal(Decimal::from(i64::from(*b)))),
+        _ => None,
+    }
+}
+
+fn to_boolean(v: &Value) -> Option<Value> {
+    match v {
+        Value::Boolean(_) => Some(v.clone()),
+        Value::String(s) => match s.to_lowercase().as_str() {
+            "true" | "1" => Some(Value::Boolean(true)),
+            "false" | "0" => Some(Value::Boolean(false)),
+            _ => None,
+        },
+        Value::Integer(1) => Some(Value::Boolean(true)),
+        Value::Integer(0) => Some(Value::Boolean(false)),
+        _ => None,
+    }
+}
+
+fn conv(input: &[Value], f: impl Fn(&Value) -> Option<Value>) -> Result<Vec<Value>, Error> {
+    Ok(match eval::singleton(input)? {
+        None => vec![],
+        Some(v) => f(v).into_iter().collect(),
+    })
+}
+
+fn conv_check(input: &[Value], f: impl Fn(&Value) -> Option<Value>) -> Result<Vec<Value>, Error> {
+    Ok(match eval::singleton(input)? {
+        None => vec![],
+        Some(v) => vec![Value::Boolean(f(v).is_some())],
+    })
+}
+
+// every direct child value of every complex item
+fn children_of(items: &[Value]) -> Vec<Value> {
+    let mut out = Vec::new();
+    for v in items {
+        if let Value::Complex { data, .. } = v {
+            for (_key, child) in data {
+                out.extend(from_json(child));
+            }
+        }
+    }
+    out
 }
 
 fn int_or_decimal(d: Decimal) -> Vec<Value> {
