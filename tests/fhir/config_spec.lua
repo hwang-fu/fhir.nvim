@@ -35,7 +35,7 @@ describe("config", function()
 
   it("exposes the pinned engine tag", function()
     config.setup({})
-    assert.are.equal("v2.0.0", config.get().native.tag)
+    assert.are.equal("v2.1.0", config.get().native.tag)
     config.setup({ native = { tag = "v9.9.9" } })
     assert.are.equal("v9.9.9", config.get().native.tag)
     assert.has_error(function()
