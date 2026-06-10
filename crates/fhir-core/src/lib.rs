@@ -13,6 +13,14 @@ pub fn evaluate(resource_json: &str, expression: &str) -> Result<Vec<Value>, Err
     Engine::new().evaluate(resource_json, expression)
 }
 
+/// Like [`evaluate`], but renders the result collection as a compact JSON
+/// array string - the form foreign callers (e.g. the editor binding) consume.
+pub fn evaluate_json(resource_json: &str, expression: &str) -> Result<String, Error> {
+    let values = evaluate(resource_json, expression)?;
+    let rendered: Vec<serde_json::Value> = values.iter().map(value::to_json).collect();
+    serde_json::to_string(&rendered).map_err(|e| Error::Eval(format!("render: {e}")))
+}
+
 /// Resolves a FHIR reference (e.g. "Patient/p1") to a resource. How references
 /// are looked up is the caller's concern; the engine only asks.
 pub trait Resolve {
@@ -359,5 +367,22 @@ mod tests {
         let engine = Engine::new().with_resolver(Box::new(FakeResolver));
         let got = engine.evaluate(OBS, "subject.resolve().id").unwrap();
         assert_eq!(got, [Value::String("p1".into())]);
+    }
+
+    #[test]
+    fn evaluate_json_renders_a_json_array() {
+        assert_eq!(
+            evaluate_json(PATIENT, "name.given").unwrap(),
+            r#"["Peter","James","Jim"]"#
+        );
+        assert_eq!(evaluate_json(PATIENT, "nothing").unwrap(), "[]");
+        assert_eq!(evaluate_json(PATIENT, "active").unwrap(), "[true]");
+        assert_eq!(evaluate_json(PATIENT, "name.given.count()").unwrap(), "[3]");
+        // exact decimals survive the round trip
+        assert_eq!(evaluate_json(r#"{"a": 0.10}"#, "a").unwrap(), "[0.10]");
+        // complex values render as their json objects
+        assert_eq!(evaluate_json(OBS, "value.unit").unwrap(), r#"["lbs"]"#);
+        assert!(evaluate_json(PATIENT, "1 +").is_err());
+        assert!(evaluate_json("not json", "name").is_err());
     }
 }
