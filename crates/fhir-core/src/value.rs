@@ -8,6 +8,10 @@ pub enum Value {
     String(String),
     Date(String),
     DateTime(String),
+    Quantity {
+        value: Decimal,
+        unit: String,
+    },
     Complex {
         data: serde_json::Map<String, serde_json::Value>,
         ty: Option<String>,
@@ -47,9 +51,20 @@ pub(crate) fn to_json(v: &Value) -> serde_json::Value {
     match v {
         Value::Boolean(b) => (*b).into(),
         Value::Integer(i) => (*i).into(),
-        Value::Decimal(d) => serde_json::from_str(&d.to_string())
-            .expect("a decimal's text form is valid json"),
+        Value::Decimal(d) => {
+            serde_json::from_str(&d.to_string()).expect("a decimal's text form is valid json")
+        }
         Value::String(s) | Value::Date(s) | Value::DateTime(s) => s.clone().into(),
+        Value::Quantity { value, unit } => {
+            let mut map = serde_json::Map::new();
+            map.insert(
+                "value".into(),
+                serde_json::from_str(&value.to_string())
+                    .expect("a decimal's text form is valid json"),
+            );
+            map.insert("unit".into(), serde_json::Value::String(unit.clone()));
+            serde_json::Value::Object(map)
+        }
         Value::Complex { data, .. } => serde_json::Value::Object(data.clone()),
     }
 }
@@ -73,6 +88,7 @@ pub(crate) fn matches_type(v: &Value, name: &str) -> bool {
         }
         Value::Date(_) => eq("date"),
         Value::DateTime(_) => eq("dateTime"),
+        Value::Quantity { .. } => eq("Quantity"),
         Value::Complex { ty: Some(t), .. } => name.eq_ignore_ascii_case(t),
         Value::Complex { ty: None, .. } => false,
     }
@@ -108,6 +124,9 @@ impl PartialEq for Value {
             (Value::Date(a), Value::String(b)) | (Value::String(b), Value::Date(a)) => a == b,
             (Value::DateTime(a), Value::String(b)) | (Value::String(b), Value::DateTime(a)) => {
                 a == b
+            }
+            (Value::Quantity { value: a, unit: ua }, Value::Quantity { value: b, unit: ub }) => {
+                ua == ub && a == b
             }
             // deep json equality; the type tag does not affect identity
             (Value::Complex { data: a, .. }, Value::Complex { data: b, .. }) => a == b,
