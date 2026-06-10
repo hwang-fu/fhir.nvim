@@ -5,6 +5,31 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.1.0] - unreleased
+
+Expanded FHIRPath support; the conformance rate more than doubles
+(26.5% -> 54.9% of the official suite).
+
+### Added
+
+- Arithmetic (`+ - * / div mod`, unary minus), `xor`/`implies`, `~`/`!~`
+  equivalence, and the `contains` membership operator.
+- String functions: `length`, `upper`, `lower`, `trim`, `startsWith`,
+  `endsWith`, `contains`, `substring`, `indexOf`, `replace`, `split`,
+  `join`, `toChars`, `matches`, `replaceMatches`.
+- Math functions: `abs`, `ceiling`, `floor`, `round`, `truncate`, `sqrt`,
+  `exp`, `ln`, `log`, `power`.
+- Conversions: `toString`, `toInteger`, `toDecimal`, `toBoolean`, and the
+  `convertsToX` family.
+- `iif` (lazily evaluated), `children`, `descendants`, `repeat`.
+
+### Changed
+
+- The default engine release pin (`native.tag`) is `v2.1.0`.
+
+Date and quantity arithmetic remain out; see the README for the coverage
+list.
+
 ## [2.0.0] - 2026-06-10
 
 FHIRPath evaluation in the editor, powered by a standalone Rust engine.
