@@ -3,6 +3,7 @@ local M = {}
 local defaults = {
   detection = "auto",
   keymaps = {},
+  native = {},
 }
 
 -- Active config; initialized from defaults so get() works before setup() is called.
@@ -11,6 +12,9 @@ local current = vim.deepcopy(defaults)
 local function validate(opts)
   if opts.detection ~= nil and opts.detection ~= "auto" and opts.detection ~= "manual" then
     error("fhir: invalid detection mode: " .. tostring(opts.detection))
+  end
+  if opts.native ~= nil and opts.native.dir ~= nil and type(opts.native.dir) ~= "string" then
+    error("fhir: native.dir must be a string")
   end
 end
 
