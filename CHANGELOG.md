@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] - unreleased
+
+FHIRPath evaluation in the editor, powered by a standalone Rust engine.
+
+### Added
+
+- `:FhirEval [expr]` (and `keymaps.eval`): evaluate a FHIRPath expression
+  against the resource under the cursor; results in a floating window titled
+  with the target resource. Bare `:FhirEval` prompts for an expression.
+- A standalone Rust FHIRPath interpreter (`crates/fhir-core`): hand-written
+  lexer and Pratt parser, tree-walking evaluator over a JSON model with exact
+  decimals. Measured against the official FHIRPath conformance suite (rate
+  published in the README and enforced as a ratcheting CI floor).
+- `resolve()` inside expressions follows references through the open buffer -
+  `subject.resolve().name.given` works in a Bundle.
+- `:FhirFetchEngine [tag]`: download a prebuilt, checksum-verified engine for
+  linux/macos (x86_64/aarch64) into Neovim's data directory - no Rust
+  toolchain needed. `make build` remains for other platforms; `native.dir`
+  and `native.tag` config options control the lookup and the pin.
+- `:checkhealth fhir` reports engine availability.
+
 ## [1.0.0] - 2026-06-09
 
 First release: navigate and comprehend FHIR R4 JSON like a codebase.
