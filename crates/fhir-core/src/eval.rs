@@ -235,7 +235,7 @@ fn concat_operand(vals: &[Value]) -> Result<String, Error> {
     }
 }
 
-fn singleton(vals: &[Value]) -> Result<Option<&Value>, Error> {
+pub(crate) fn singleton(vals: &[Value]) -> Result<Option<&Value>, Error> {
     match vals {
         [] => Ok(None),
         [v] => Ok(Some(v)),
