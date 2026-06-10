@@ -25,7 +25,7 @@ jobs:
             platform: macos-aarch64
             lib: libfhir_core.dylib
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -35,7 +35,7 @@ jobs:
       - name: Rename artifact
         run: cp "target/release/${{ matrix.lib }}" "fhir_core-${{ matrix.platform }}.so"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: fhir_core-${{ matrix.platform }}
           path: fhir_core-${{ matrix.platform }}.so
@@ -45,7 +45,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           merge-multiple: true
 

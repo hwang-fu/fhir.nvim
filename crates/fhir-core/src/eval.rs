@@ -4,6 +4,7 @@
 use std::cmp::Ordering;
 
 use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
 
 use crate::ast::{BinOp, Expr, Literal, TypeOp};
 use crate::error::Error;
@@ -143,8 +144,86 @@ fn binary(op: BinOp, lhs: Vec<Value>, rhs: Vec<Value>) -> Result<Vec<Value>, Err
             s.push_str(&concat_operand(&rhs)?);
             Value::String(s)
         }
+        BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::IntDiv | BinOp::Mod => {
+            let (Some(a), Some(b)) = (singleton(&lhs)?, singleton(&rhs)?) else {
+                return Ok(vec![]);
+            };
+            // + also concatenates strings (with empty propagation, unlike &)
+            if op == BinOp::Add
+                && let (Value::String(x), Value::String(y)) = (a, b)
+            {
+                return Ok(vec![Value::String(format!("{x}{y}"))]);
+            }
+            let Some((x, y, both_int)) = numbers(a, b) else {
+                return Err(Error::Eval(format!(
+                    "cannot apply arithmetic to {a:?} and {b:?}"
+                )));
+            };
+            let computed = match op {
+                BinOp::Add => Some(x + y),
+                BinOp::Sub => Some(x - y),
+                BinOp::Mul => Some(x * y),
+                BinOp::Div => x.checked_div(y),
+                BinOp::IntDiv => x.checked_div(y).map(|d| d.trunc()),
+                _ => x.checked_rem(y), // Mod
+            };
+            // division by zero is empty, not an error
+            let Some(r) = computed else {
+                return Ok(vec![]);
+            };
+            // integers in, integer out - except /, which always yields a decimal
+            if both_int
+                && op != BinOp::Div
+                && let Some(i) = r.to_i64()
+            {
+                return Ok(vec![Value::Integer(i)]);
+            }
+            Value::Decimal(r)
+        }
+        BinOp::Xor => match (boolean_of(&lhs)?, boolean_of(&rhs)?) {
+            (Some(a), Some(b)) => Value::Boolean(a != b),
+            _ => return Ok(vec![]),
+        },
+        BinOp::Implies => match (boolean_of(&lhs)?, boolean_of(&rhs)?) {
+            // a false antecedent makes the implication true regardless
+            (Some(false), _) => Value::Boolean(true),
+            (Some(true), Some(b)) => Value::Boolean(b),
+            (None, Some(true)) => Value::Boolean(true),
+            _ => return Ok(vec![]),
+        },
+        BinOp::Equiv | BinOp::NotEquiv => {
+            // unlike =, equivalence on two empties is true
+            let eq = if lhs.is_empty() && rhs.is_empty() {
+                true
+            } else {
+                lhs.len() == rhs.len() && lhs.iter().zip(&rhs).all(|(a, b)| equivalent(a, b))
+            };
+            Value::Boolean(if op == BinOp::Equiv { eq } else { !eq })
+        }
     };
     Ok(vec![result])
+}
+
+fn numbers(a: &Value, b: &Value) -> Option<(Decimal, Decimal, bool)> {
+    let conv = |v: &Value| match v {
+        Value::Integer(i) => Some((Decimal::from(*i), true)),
+        Value::Decimal(d) => Some((*d, false)),
+        _ => None,
+    };
+    let (x, both_x) = conv(a)?;
+    let (y, both_y) = conv(b)?;
+    Some((x, y, both_x && both_y))
+}
+
+// equivalence: strings compare case-insensitively with whitespace collapsed
+fn equivalent(a: &Value, b: &Value) -> bool {
+    match (a, b) {
+        (Value::String(x), Value::String(y)) => {
+            let norm = |s: &str| s.to_lowercase().split_whitespace().collect::<Vec<_>>().join(" ");
+            norm(x) == norm(y)
+        }
+        _ => a == b,
+    }
 }
 
 // concat treats an empty operand as the empty string
@@ -156,7 +235,7 @@ fn concat_operand(vals: &[Value]) -> Result<String, Error> {
     }
 }
 
-fn singleton(vals: &[Value]) -> Result<Option<&Value>, Error> {
+pub(crate) fn singleton(vals: &[Value]) -> Result<Option<&Value>, Error> {
     match vals {
         [] => Ok(None),
         [v] => Ok(Some(v)),

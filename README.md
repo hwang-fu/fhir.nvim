@@ -104,18 +104,26 @@ FHIRPath conformance suite** (vendored under
 ratcheting pass-rate floor. *Conformance* means how faithfully an
 implementation matches the behavior the spec requires; the suite - 935
 input/expression/expected-output cases published with the spec - turns that
-into a measurable score. Current rate: **26% (248/935)**.
+into a measurable score. Current rate: **54.9% (514/935)**.
 
 Covered so far: path navigation and indexing; boolean/string/integer/decimal/
-date/dateTime literals; equality and comparison with empty propagation;
-three-valued `and`/`or`/`not()`; `in`, `|` (union), `&` (concat); `exists`,
-`empty`, `count`, `all`, `distinct`; `where`, `select`, `ofType` (handles
-polymorphic `value[x]`); `first`/`last`/`single`/`tail`/`skip`/`take`;
-`is`/`as`; `extension(url)`; `resolve()` via a pluggable resolver trait.
+date/dateTime literals; equality, comparison, and `~` equivalence; arithmetic
+(`+ - * / div mod`, unary minus); three-valued `and`/`or`/`xor`/`implies`/
+`not()`; `in`/`contains` membership, `|` (union), `&` (concat); existence
+(`exists`, `empty`, `count`, `all`, `distinct`); `where`, `select`, `ofType`
+(handles polymorphic `value[x]`); subsetting (`first`/`last`/`single`/`tail`/
+`skip`/`take`); `is`/`as`; string functions (`length`, `upper`, `lower`,
+`trim`, `startsWith`, `endsWith`, `contains`, `substring`, `indexOf`,
+`replace`, `split`, `join`, `toChars`, `matches`, `replaceMatches`); math
+functions (`abs`, `ceiling`, `floor`, `round`, `truncate`, `sqrt`, `exp`,
+`ln`, `log`, `power`); conversions (`toString`/`toInteger`/`toDecimal`/
+`toBoolean` and their `convertsToX` twins); `iif` (lazy), `children`,
+`descendants`, `repeat`; `extension(url)`; `resolve()` via a pluggable
+resolver trait.
 
-Not covered yet (the bulk of the gap to 100%): arithmetic operators,
-string/math/conversion functions, type reflection, `%variables`, and
-strict choice-element typing rules.
+Not covered yet: date/dateTime/quantity arithmetic and quantity literals
+(planned for a future release), `%variables`, type reflection, strict
+choice-element typing rules, and terminology functions.
 
 ## Roadmap
 

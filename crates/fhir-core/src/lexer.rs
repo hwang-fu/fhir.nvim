@@ -16,6 +16,11 @@ pub enum Token {
     In,
     Is,
     As,
+    Xor,
+    Implies,
+    Div,
+    Mod,
+    Contains,
     DollarThis,
     Dot,
     Comma,
@@ -25,6 +30,11 @@ pub enum Token {
     RBracket,
     Pipe,
     Amp,
+    Plus,
+    Star,
+    Slash,
+    Tilde,
+    NotTilde,
     Eq,
     Ne,
     Lt,
@@ -43,6 +53,11 @@ fn keyword(word: &str) -> Option<Token> {
         "in" => Some(Token::In),
         "is" => Some(Token::Is),
         "as" => Some(Token::As),
+        "xor" => Some(Token::Xor),
+        "implies" => Some(Token::Implies),
+        "div" => Some(Token::Div),
+        "mod" => Some(Token::Mod),
+        "contains" => Some(Token::Contains),
         _ => None,
     }
 }
@@ -199,15 +214,15 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, Error> {
                             }
                         }
                     }
-                    _ => return Err(Error::Lex("unexpected character: /".into())),
+                    _ => tokens.push(Token::Slash),
                 }
             }
             '!' => {
                 chars.next();
-                if chars.next() == Some('=') {
-                    tokens.push(Token::Ne);
-                } else {
-                    return Err(Error::Lex("expected = after !".into()));
+                match chars.next() {
+                    Some('=') => tokens.push(Token::Ne),
+                    Some('~') => tokens.push(Token::NotTilde),
+                    _ => return Err(Error::Lex("expected = or ~ after !".into())),
                 }
             }
             '<' => {
@@ -267,6 +282,18 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, Error> {
             '-' => {
                 chars.next();
                 tokens.push(Token::Minus);
+            }
+            '+' => {
+                chars.next();
+                tokens.push(Token::Plus);
+            }
+            '*' => {
+                chars.next();
+                tokens.push(Token::Star);
+            }
+            '~' => {
+                chars.next();
+                tokens.push(Token::Tilde);
             }
             other => return Err(Error::Lex(format!("unexpected character: {other}"))),
         }
@@ -347,6 +374,28 @@ mod tests {
     fn comments_and_whitespace() {
         assert_eq!(lex("a // line\n.b"), lex("a.b"));
         assert_eq!(lex("a /* block */ .b"), lex("a.b"));
+    }
+
+    #[test]
+    fn arithmetic_and_equivalence_tokens() {
+        assert_eq!(
+            lex("+ * / ~"),
+            vec![Token::Plus, Token::Star, Token::Slash, Token::Tilde]
+        );
+        assert_eq!(lex("!~"), vec![Token::NotTilde]);
+        assert_eq!(
+            lex("xor implies div mod contains"),
+            vec![
+                Token::Xor,
+                Token::Implies,
+                Token::Div,
+                Token::Mod,
+                Token::Contains
+            ]
+        );
+        // bare / still lexes; comments still skip
+        assert_eq!(lex("4 / 2").len(), 3);
+        assert_eq!(lex("a // c\n.b"), lex("a.b"));
     }
 
     #[test]

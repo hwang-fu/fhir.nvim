@@ -1,3 +1,6 @@
+use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::{Decimal, MathematicalOps, RoundingStrategy};
+
 use crate::ast::Expr;
 use crate::error::Error;
 use crate::eval::{self, Ctx};
@@ -126,6 +129,224 @@ pub fn call(
                 "single() on a collection with more than one value".into(),
             )),
         },
+        ("length", []) => map_str(input, |s| Value::Integer(s.chars().count() as i64)),
+        ("upper", []) => map_str(input, |s| Value::String(s.to_uppercase())),
+        ("lower", []) => map_str(input, |s| Value::String(s.to_lowercase())),
+        ("trim", []) => map_str(input, |s| Value::String(s.trim().to_string())),
+        ("startsWith", [p]) => {
+            let p = string_arg(p, focus, ctx)?;
+            map_str(input, |s| Value::Boolean(s.starts_with(&p)))
+        }
+        ("endsWith", [p]) => {
+            let p = string_arg(p, focus, ctx)?;
+            map_str(input, |s| Value::Boolean(s.ends_with(&p)))
+        }
+        ("contains", [p]) => {
+            let p = string_arg(p, focus, ctx)?;
+            map_str(input, |s| Value::Boolean(s.contains(&p)))
+        }
+        ("indexOf", [p]) => {
+            let p = string_arg(p, focus, ctx)?;
+            map_str(input, |s| match s.find(&p) {
+                // char position, not byte position
+                Some(byte) => Value::Integer(s[..byte].chars().count() as i64),
+                None => Value::Integer(-1),
+            })
+        }
+        ("replace", [from, to]) => {
+            let from = string_arg(from, focus, ctx)?;
+            let to = string_arg(to, focus, ctx)?;
+            map_str(input, |s| Value::String(s.replace(&from, &to)))
+        }
+        ("substring", [start]) | ("substring", [start, _]) => {
+            let begin = int_arg(start, focus, ctx)?;
+            let length = match args {
+                [_, l] => Some(int_arg(l, focus, ctx)?),
+                _ => None,
+            };
+            let Some(s) = string_input(input)? else {
+                return Ok(vec![]);
+            };
+            let chars: Vec<char> = s.chars().collect();
+            if begin < 0 || begin as usize >= chars.len() {
+                return Ok(vec![]);
+            }
+            let begin = begin as usize;
+            let end = match length {
+                Some(l) => (begin + l.max(0) as usize).min(chars.len()),
+                None => chars.len(),
+            };
+            Ok(vec![Value::String(chars[begin..end].iter().collect())])
+        }
+        ("split", [sep]) => {
+            let sep = string_arg(sep, focus, ctx)?;
+            Ok(match string_input(input)? {
+                None => vec![],
+                Some(s) => s.split(&sep).map(|p| Value::String(p.to_string())).collect(),
+            })
+        }
+        ("toChars", []) => Ok(match string_input(input)? {
+            None => vec![],
+            Some(s) => s.chars().map(|c| Value::String(c.to_string())).collect(),
+        }),
+        ("join", [sep]) => {
+            let sep = string_arg(sep, focus, ctx)?;
+            let mut parts = Vec::new();
+            for v in input {
+                match v {
+                    Value::String(s) | Value::Date(s) | Value::DateTime(s) => {
+                        parts.push(s.as_str())
+                    }
+                    other => {
+                        return Err(Error::Eval(format!("join expects strings, got {other:?}")));
+                    }
+                }
+            }
+            Ok(vec![Value::String(parts.join(&sep))])
+        }
+        ("matches", [p]) => {
+            let re = regex_arg(p, focus, ctx)?;
+            map_str(input, |s| Value::Boolean(re.is_match(s)))
+        }
+        ("replaceMatches", [p, to]) => {
+            let re = regex_arg(p, focus, ctx)?;
+            let to = string_arg(to, focus, ctx)?;
+            map_str(input, |s| Value::String(re.replace_all(s, to.as_str()).into_owned()))
+        }
+        ("abs", []) => Ok(match number_input(input)? {
+            None => vec![],
+            Some((d, true)) => int_or_decimal(d.abs()),
+            Some((d, false)) => vec![Value::Decimal(d.abs())],
+        }),
+        ("ceiling", []) => map_num_int(input, |d| d.ceil()),
+        ("floor", []) => map_num_int(input, |d| d.floor()),
+        ("truncate", []) => map_num_int(input, |d| d.trunc()),
+        // half away from zero, per spec - not banker's rounding
+        ("round", []) => map_num_int(input, |d| {
+            d.round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero)
+        }),
+        ("round", [p]) => {
+            let p = int_arg(p, focus, ctx)?.max(0) as u32;
+            Ok(match number_input(input)? {
+                None => vec![],
+                Some((d, _)) => vec![Value::Decimal(
+                    d.round_dp_with_strategy(p, RoundingStrategy::MidpointAwayFromZero),
+                )],
+            })
+        }
+        // domain errors (negative sqrt, non-positive logs) yield empty
+        ("sqrt", []) => Ok(match number_input(input)? {
+            None => vec![],
+            Some((d, _)) => d.sqrt().map(Value::Decimal).into_iter().collect(),
+        }),
+        ("exp", []) => Ok(match number_input(input)? {
+            None => vec![],
+            Some((d, _)) => d.checked_exp().map(Value::Decimal).into_iter().collect(),
+        }),
+        ("ln", []) => Ok(match number_input(input)? {
+            None => vec![],
+            Some((d, _)) if d <= Decimal::ZERO => vec![],
+            Some((d, _)) => vec![Value::Decimal(d.ln())],
+        }),
+        ("log", [base]) => {
+            let (b, _) = number_arg(base, focus, ctx)?;
+            Ok(match number_input(input)? {
+                None => vec![],
+                Some((d, _)) if d <= Decimal::ZERO || b <= Decimal::ZERO => vec![],
+                Some((d, _)) => d
+                    .ln()
+                    .checked_div(b.ln())
+                    .map(Value::Decimal)
+                    .into_iter()
+                    .collect(),
+            })
+        }
+        ("power", [e]) => {
+            let (exp, exp_int) = number_arg(e, focus, ctx)?;
+            Ok(match number_input(input)? {
+                None => vec![],
+                // fractional powers of negatives are not real numbers
+                Some((d, _)) if d < Decimal::ZERO && !exp_int => vec![],
+                Some((d, base_int)) => {
+                    let r = if exp_int {
+                        exp.to_i64().and_then(|i| d.checked_powi(i))
+                    } else {
+                        d.checked_powd(exp)
+                    };
+                    match r {
+                        None => vec![],
+                        Some(r) if base_int && exp_int && exp >= Decimal::ZERO => {
+                            int_or_decimal(r)
+                        }
+                        Some(r) => vec![Value::Decimal(r)],
+                    }
+                }
+            })
+        }
+        ("toString", []) => conv(input, to_string_value),
+        ("toInteger", []) => conv(input, to_integer),
+        ("toDecimal", []) => conv(input, to_decimal),
+        ("toBoolean", []) => conv(input, to_boolean),
+        ("convertsToString", []) => conv_check(input, to_string_value),
+        ("convertsToInteger", []) => conv_check(input, to_integer),
+        ("convertsToDecimal", []) => conv_check(input, to_decimal),
+        ("convertsToBoolean", []) => conv_check(input, to_boolean),
+        ("convertsToDate", []) => conv_check(input, |v| match v {
+            Value::Date(_) => Some(v.clone()),
+            Value::String(s) if crate::value::looks_like_date(s) => Some(v.clone()),
+            _ => None,
+        }),
+        ("convertsToDateTime", []) => conv_check(input, |v| match v {
+            Value::DateTime(_) => Some(v.clone()),
+            Value::String(s) if crate::value::looks_like_datetime(s) => Some(v.clone()),
+            _ => None,
+        }),
+        // lazy by construction: only the chosen branch is ever evaluated
+        ("iif", [cond, then]) | ("iif", [cond, then, _]) => {
+            let chosen = match eval::boolean_of(&eval::eval(cond, input, ctx)?)? {
+                Some(true) => Some(then),
+                _ => match args {
+                    [_, _, otherwise] => Some(otherwise),
+                    _ => None,
+                },
+            };
+            match chosen {
+                Some(branch) => eval::eval(branch, input, ctx),
+                None => Ok(vec![]),
+            }
+        }
+        ("children", []) => Ok(children_of(input)),
+        ("descendants", []) => {
+            let mut all = Vec::new();
+            let mut frontier = children_of(input);
+            while !frontier.is_empty() {
+                let next = children_of(&frontier);
+                all.extend(frontier);
+                frontier = next;
+            }
+            Ok(all)
+        }
+        // apply the projection to the newest results until nothing new appears
+        ("repeat", [projection]) => {
+            let mut out: Vec<Value> = Vec::new();
+            let mut frontier: Vec<Value> = input.to_vec();
+            loop {
+                let mut fresh = Vec::new();
+                for item in &frontier {
+                    for v in eval::eval(projection, std::slice::from_ref(item), ctx)? {
+                        if !out.contains(&v) && !fresh.contains(&v) {
+                            fresh.push(v);
+                        }
+                    }
+                }
+                if fresh.is_empty() {
+                    break;
+                }
+                out.extend(fresh.iter().cloned());
+                frontier = fresh;
+            }
+            Ok(out)
+        }
         _ => Err(Error::Eval(format!("unknown function: {name}"))),
     }
 }
@@ -138,6 +359,134 @@ fn int_arg(expr: &Expr, focus: &[Value], ctx: &Ctx) -> Result<i64, Error> {
             "expected a single integer argument, got {other:?}"
         ))),
     }
+}
+
+// singleton string-ish input (dates pass as their text); empty stays empty
+fn string_input(input: &[Value]) -> Result<Option<&str>, Error> {
+    match eval::singleton(input)? {
+        None => Ok(None),
+        Some(Value::String(s)) | Some(Value::Date(s)) | Some(Value::DateTime(s)) => {
+            Ok(Some(s.as_str()))
+        }
+        Some(other) => Err(Error::Eval(format!("expected a string, got {other:?}"))),
+    }
+}
+
+fn map_str(input: &[Value], f: impl Fn(&str) -> Value) -> Result<Vec<Value>, Error> {
+    Ok(match string_input(input)? {
+        None => vec![],
+        Some(s) => vec![f(s)],
+    })
+}
+
+// singleton numeric input; the bool tracks whether it was an Integer
+fn number_input(input: &[Value]) -> Result<Option<(Decimal, bool)>, Error> {
+    match eval::singleton(input)? {
+        None => Ok(None),
+        Some(Value::Integer(i)) => Ok(Some((Decimal::from(*i), true))),
+        Some(Value::Decimal(d)) => Ok(Some((*d, false))),
+        Some(other) => Err(Error::Eval(format!("expected a number, got {other:?}"))),
+    }
+}
+
+fn number_arg(expr: &Expr, focus: &[Value], ctx: &Ctx) -> Result<(Decimal, bool), Error> {
+    match eval::eval(expr, focus, ctx)?.as_slice() {
+        [Value::Integer(i)] => Ok((Decimal::from(*i), true)),
+        [Value::Decimal(d)] => Ok((*d, false)),
+        other => Err(Error::Eval(format!(
+            "expected a single numeric argument, got {other:?}"
+        ))),
+    }
+}
+
+fn to_string_value(v: &Value) -> Option<Value> {
+    match v {
+        Value::String(_) => Some(v.clone()),
+        Value::Date(s) | Value::DateTime(s) => Some(Value::String(s.clone())),
+        Value::Integer(i) => Some(Value::String(i.to_string())),
+        Value::Decimal(d) => Some(Value::String(d.to_string())),
+        Value::Boolean(b) => Some(Value::String(b.to_string())),
+        Value::Complex { .. } => None,
+    }
+}
+
+fn to_integer(v: &Value) -> Option<Value> {
+    match v {
+        Value::Integer(_) => Some(v.clone()),
+        Value::String(s) => s.parse::<i64>().ok().map(Value::Integer),
+        Value::Boolean(b) => Some(Value::Integer(i64::from(*b))),
+        _ => None,
+    }
+}
+
+fn to_decimal(v: &Value) -> Option<Value> {
+    match v {
+        Value::Decimal(_) => Some(v.clone()),
+        Value::Integer(i) => Some(Value::Decimal(Decimal::from(*i))),
+        Value::String(s) => s.parse::<Decimal>().ok().map(Value::Decimal),
+        Value::Boolean(b) => Some(Value::Decimal(Decimal::from(i64::from(*b)))),
+        _ => None,
+    }
+}
+
+fn to_boolean(v: &Value) -> Option<Value> {
+    match v {
+        Value::Boolean(_) => Some(v.clone()),
+        Value::String(s) => match s.to_lowercase().as_str() {
+            "true" | "1" => Some(Value::Boolean(true)),
+            "false" | "0" => Some(Value::Boolean(false)),
+            _ => None,
+        },
+        Value::Integer(1) => Some(Value::Boolean(true)),
+        Value::Integer(0) => Some(Value::Boolean(false)),
+        _ => None,
+    }
+}
+
+fn conv(input: &[Value], f: impl Fn(&Value) -> Option<Value>) -> Result<Vec<Value>, Error> {
+    Ok(match eval::singleton(input)? {
+        None => vec![],
+        Some(v) => f(v).into_iter().collect(),
+    })
+}
+
+fn conv_check(input: &[Value], f: impl Fn(&Value) -> Option<Value>) -> Result<Vec<Value>, Error> {
+    Ok(match eval::singleton(input)? {
+        None => vec![],
+        Some(v) => vec![Value::Boolean(f(v).is_some())],
+    })
+}
+
+// every direct child value of every complex item
+fn children_of(items: &[Value]) -> Vec<Value> {
+    let mut out = Vec::new();
+    for v in items {
+        if let Value::Complex { data, .. } = v {
+            for (_key, child) in data {
+                out.extend(from_json(child));
+            }
+        }
+    }
+    out
+}
+
+fn int_or_decimal(d: Decimal) -> Vec<Value> {
+    match d.to_i64() {
+        Some(i) => vec![Value::Integer(i)],
+        None => vec![Value::Decimal(d)],
+    }
+}
+
+fn map_num_int(input: &[Value], f: impl Fn(Decimal) -> Decimal) -> Result<Vec<Value>, Error> {
+    Ok(match number_input(input)? {
+        None => vec![],
+        Some((d, _)) => int_or_decimal(f(d)),
+    })
+}
+
+fn regex_arg(expr: &Expr, focus: &[Value], ctx: &Ctx) -> Result<regex_lite::Regex, Error> {
+    let pattern = string_arg(expr, focus, ctx)?;
+    regex_lite::Regex::new(&pattern).map_err(|e| Error::Eval(format!("bad regex: {e}")))
 }
 
 fn string_arg(expr: &Expr, focus: &[Value], ctx: &Ctx) -> Result<String, Error> {

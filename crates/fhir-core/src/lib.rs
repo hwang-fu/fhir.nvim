@@ -390,4 +390,150 @@ mod tests {
             r#"["p1"]"#
         );
     }
+
+    #[test]
+    fn arithmetic_operators() {
+        assert_eq!(ev1(PATIENT, "2 + 2"), Value::Integer(4));
+        assert_eq!(ev1(PATIENT, "2 + 2.5"), Value::Decimal("4.5".parse().unwrap()));
+        assert_eq!(ev1(PATIENT, "5 - 7"), Value::Integer(-2));
+        assert_eq!(ev1(PATIENT, "3 * 3"), Value::Integer(9));
+        // / always yields a decimal; div is integer division
+        assert_eq!(ev1(PATIENT, "5 / 2"), Value::Decimal("2.5".parse().unwrap()));
+        assert_eq!(ev1(PATIENT, "5 div 2"), Value::Integer(2));
+        assert_eq!(ev1(PATIENT, "5 mod 2"), Value::Integer(1));
+        // division by zero is empty, not an error
+        assert!(ev(PATIENT, "5 / 0").is_empty());
+        assert!(ev(PATIENT, "5 div 0").is_empty());
+        // + concatenates strings, empty propagates (unlike &)
+        assert_eq!(ev1(PATIENT, "'a' + 'b'"), Value::String("ab".into()));
+        assert!(ev(PATIENT, "name[9].family + 'x'").is_empty());
+        // unary minus on an expression
+        assert_eq!(ev1(PATIENT, "-(2 + 3)"), Value::Integer(-5));
+    }
+
+    #[test]
+    fn logic_and_equivalence_operators() {
+        assert_eq!(ev1(PATIENT, "true xor false"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "true xor true"), Value::Boolean(false));
+        assert_eq!(ev1(PATIENT, "false implies false"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "true implies false"), Value::Boolean(false));
+        // false implies anything (even empty) is true
+        assert_eq!(
+            ev1(PATIENT, "(1 = 2) implies (name[9].family = 'x')"),
+            Value::Boolean(true)
+        );
+        // equivalence: empty ~ empty is true; = would be empty
+        assert_eq!(ev1(PATIENT, "nothing ~ alsonothing"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "1 ~ 1"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "'ABC' ~ 'abc'"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "'a' !~ 'b'"), Value::Boolean(true));
+        // contains is in, reversed
+        assert_eq!(
+            ev1(PATIENT, "name.given contains 'Jim'"),
+            Value::Boolean(true)
+        );
+    }
+
+    #[test]
+    fn string_functions() {
+        assert_eq!(ev1(PATIENT, "'hello'.length()"), Value::Integer(5));
+        assert_eq!(ev1(PATIENT, "'hello'.upper()"), Value::String("HELLO".into()));
+        assert_eq!(ev1(PATIENT, "'HELLO'.lower()"), Value::String("hello".into()));
+        assert_eq!(ev1(PATIENT, "'hello'.startsWith('he')"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "'hello'.endsWith('lo')"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "'hello'.contains('ell')"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "'hello'.substring(1)"), Value::String("ello".into()));
+        assert_eq!(ev1(PATIENT, "'hello'.substring(1, 3)"), Value::String("ell".into()));
+        assert!(ev(PATIENT, "'hello'.substring(9)").is_empty());
+        assert_eq!(ev1(PATIENT, "'hello'.indexOf('ll')"), Value::Integer(2));
+        assert_eq!(ev1(PATIENT, "'hello'.indexOf('x')"), Value::Integer(-1));
+        assert_eq!(
+            ev1(PATIENT, "'hello'.replace('l', 'L')"),
+            Value::String("heLLo".into())
+        );
+        assert_eq!(ev1(PATIENT, "'  hi  '.trim()"), Value::String("hi".into()));
+        assert_eq!(ev1(PATIENT, "'a,b,c'.split(',').count()"), Value::Integer(3));
+        assert_eq!(
+            ev1(PATIENT, "name.given.join('-')"),
+            Value::String("Peter-James-Jim".into())
+        );
+        assert_eq!(ev1(PATIENT, "'abc'.toChars().count()"), Value::Integer(3));
+        assert_eq!(ev1(PATIENT, "'hello'.matches('^h.*o$')"), Value::Boolean(true));
+        assert_eq!(
+            ev1(PATIENT, "'hello'.replaceMatches('l+', 'L')"),
+            Value::String("heLo".into())
+        );
+        // empty input propagates; bad regex errors
+        assert!(ev(PATIENT, "nothing.upper()").is_empty());
+        assert!(matches!(
+            evaluate(PATIENT, "'x'.matches('(')"),
+            Err(Error::Eval(_))
+        ));
+    }
+
+    #[test]
+    fn math_functions() {
+        assert_eq!(ev1(PATIENT, "(-5).abs()"), Value::Integer(5));
+        assert_eq!(ev1(PATIENT, "(-5.5).abs()"), Value::Decimal("5.5".parse().unwrap()));
+        assert_eq!(ev1(PATIENT, "(2.4).ceiling()"), Value::Integer(3));
+        assert_eq!(ev1(PATIENT, "(2.6).floor()"), Value::Integer(2));
+        // round() is half away from zero, not banker's
+        assert_eq!(ev1(PATIENT, "(2.5).round()"), Value::Integer(3));
+        assert_eq!(
+            ev1(PATIENT, "(2.345).round(2)"),
+            Value::Decimal("2.35".parse().unwrap())
+        );
+        assert_eq!(ev1(PATIENT, "(2.7).truncate()"), Value::Integer(2));
+        assert_eq!(ev1(PATIENT, "(9).sqrt()"), Value::Decimal("3".parse().unwrap()));
+        assert!(ev(PATIENT, "(-1).sqrt()").is_empty());
+        assert_eq!(ev1(PATIENT, "(2).power(10)"), Value::Integer(1024));
+        assert!(ev(PATIENT, "(0).ln()").is_empty());
+        assert!(ev(PATIENT, "nothing.abs()").is_empty());
+    }
+
+    #[test]
+    fn conversion_functions() {
+        assert_eq!(ev1(PATIENT, "(42).toString()"), Value::String("42".into()));
+        assert_eq!(ev1(PATIENT, "true.toString()"), Value::String("true".into()));
+        assert_eq!(ev1(PATIENT, "'42'.toInteger()"), Value::Integer(42));
+        assert!(ev(PATIENT, "'x'.toInteger()").is_empty());
+        assert_eq!(
+            ev1(PATIENT, "'3.14'.toDecimal()"),
+            Value::Decimal("3.14".parse().unwrap())
+        );
+        assert_eq!(ev1(PATIENT, "'true'.toBoolean()"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "(1).toBoolean()"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "'42'.convertsToInteger()"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "'x'.convertsToInteger()"), Value::Boolean(false));
+        assert_eq!(
+            ev1(PATIENT, "'2015-02-04'.convertsToDate()"),
+            Value::Boolean(true)
+        );
+        assert_eq!(ev1(PATIENT, "'x'.convertsToDate()"), Value::Boolean(false));
+        assert_eq!(ev1(PATIENT, "(1).convertsToString()"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "(1.5).convertsToInteger()"), Value::Boolean(false));
+    }
+
+    #[test]
+    fn iif_and_tree_functions() {
+        assert_eq!(
+            ev1(PATIENT, "iif(active, 'yes', 'no')"),
+            Value::String("yes".into())
+        );
+        assert!(ev(PATIENT, "iif(1 = 2, 'yes')").is_empty());
+        // lazy: the untaken branch may be nonsense and nothing errors
+        assert_eq!(
+            ev1(PATIENT, "iif(true, 'ok', 1.single().substring(9))"),
+            Value::String("ok".into())
+        );
+        // children: every direct child value; descendants: transitive
+        let kids = ev1(PATIENT, "children().count()");
+        assert!(matches!(kids, Value::Integer(n) if n > 0));
+        let all = ev1(PATIENT, "descendants().count()");
+        assert!(matches!((kids, all), (Value::Integer(k), Value::Integer(d)) if d > k));
+        assert_eq!(
+            ev1(PATIENT, "repeat(name).count()"),
+            ev1(PATIENT, "name.count()")
+        );
+    }
 }
