@@ -490,4 +490,50 @@ mod tests {
         assert!(ev(PATIENT, "(0).ln()").is_empty());
         assert!(ev(PATIENT, "nothing.abs()").is_empty());
     }
+
+    #[test]
+    fn conversion_functions() {
+        assert_eq!(ev1(PATIENT, "(42).toString()"), Value::String("42".into()));
+        assert_eq!(ev1(PATIENT, "true.toString()"), Value::String("true".into()));
+        assert_eq!(ev1(PATIENT, "'42'.toInteger()"), Value::Integer(42));
+        assert!(ev(PATIENT, "'x'.toInteger()").is_empty());
+        assert_eq!(
+            ev1(PATIENT, "'3.14'.toDecimal()"),
+            Value::Decimal("3.14".parse().unwrap())
+        );
+        assert_eq!(ev1(PATIENT, "'true'.toBoolean()"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "(1).toBoolean()"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "'42'.convertsToInteger()"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "'x'.convertsToInteger()"), Value::Boolean(false));
+        assert_eq!(
+            ev1(PATIENT, "'2015-02-04'.convertsToDate()"),
+            Value::Boolean(true)
+        );
+        assert_eq!(ev1(PATIENT, "'x'.convertsToDate()"), Value::Boolean(false));
+        assert_eq!(ev1(PATIENT, "(1).convertsToString()"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "(1.5).convertsToInteger()"), Value::Boolean(false));
+    }
+
+    #[test]
+    fn iif_and_tree_functions() {
+        assert_eq!(
+            ev1(PATIENT, "iif(active, 'yes', 'no')"),
+            Value::String("yes".into())
+        );
+        assert!(ev(PATIENT, "iif(1 = 2, 'yes')").is_empty());
+        // lazy: the untaken branch may be nonsense and nothing errors
+        assert_eq!(
+            ev1(PATIENT, "iif(true, 'ok', 1.single().substring(9))"),
+            Value::String("ok".into())
+        );
+        // children: every direct child value; descendants: transitive
+        let kids = ev1(PATIENT, "children().count()");
+        assert!(matches!(kids, Value::Integer(n) if n > 0));
+        let all = ev1(PATIENT, "descendants().count()");
+        assert!(matches!((kids, all), (Value::Integer(k), Value::Integer(d)) if d > k));
+        assert_eq!(
+            ev1(PATIENT, "repeat(name).count()"),
+            ev1(PATIENT, "name.count()")
+        );
+    }
 }
