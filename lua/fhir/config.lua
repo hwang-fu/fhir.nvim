@@ -5,7 +5,7 @@ local defaults = {
   keymaps = {},
   -- `tag` pins which engine release :FhirFetchEngine installs and the loader
   -- looks for; `dir` (unset by default) overrides the search path entirely.
-  native = { tag = "v2.0.0" },
+  native = { tag = "v2.1.0" },
 }
 
 -- Active config; initialized from defaults so get() works before setup() is called.
