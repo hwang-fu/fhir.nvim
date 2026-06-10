@@ -10,6 +10,13 @@ function M.setup(opts)
     vim.api.nvim_create_user_command("FhirEnable", function()
       require("fhir.detect").attach(0)
     end, { desc = "Enable fhir.nvim for the current buffer" })
+    vim.api.nvim_create_user_command(
+      "FhirFetchEngine",
+      function(cmd)
+        require("fhir.fetch").run(cmd.args ~= "" and cmd.args or nil)
+      end,
+      { nargs = "?", desc = "Download the prebuilt FHIRPath engine (optionally a specific tag)" }
+    )
     did_setup = true
   end
 end
