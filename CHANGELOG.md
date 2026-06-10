@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [2.1.0] - unreleased
+## [2.1.0] - 2026-06-10
 
 Expanded FHIRPath support; the conformance rate more than doubles
 (26.5% -> 54.9% of the official suite).
@@ -70,5 +70,6 @@ Pure Lua, offline, single-buffer, zero-config.
 - `:checkhealth fhir`: Neovim version, `json` Treesitter parser, and picker.
 - `:help fhir` documentation.
 
+[2.1.0]: https://github.com/hwang-fu/fhir.nvim/releases/tag/v2.1.0
 [2.0.0]: https://github.com/hwang-fu/fhir.nvim/releases/tag/v2.0.0
 [1.0.0]: https://github.com/hwang-fu/fhir.nvim/releases/tag/v1.0.0
