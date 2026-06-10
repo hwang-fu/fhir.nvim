@@ -1,3 +1,6 @@
+use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::{Decimal, MathematicalOps, RoundingStrategy};
+
 use crate::ast::Expr;
 use crate::error::Error;
 use crate::eval::{self, Ctx};
@@ -210,6 +213,76 @@ pub fn call(
             let to = string_arg(to, focus, ctx)?;
             map_str(input, |s| Value::String(re.replace_all(s, to.as_str()).into_owned()))
         }
+        ("abs", []) => Ok(match number_input(input)? {
+            None => vec![],
+            Some((d, true)) => int_or_decimal(d.abs()),
+            Some((d, false)) => vec![Value::Decimal(d.abs())],
+        }),
+        ("ceiling", []) => map_num_int(input, |d| d.ceil()),
+        ("floor", []) => map_num_int(input, |d| d.floor()),
+        ("truncate", []) => map_num_int(input, |d| d.trunc()),
+        // half away from zero, per spec - not banker's rounding
+        ("round", []) => map_num_int(input, |d| {
+            d.round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero)
+        }),
+        ("round", [p]) => {
+            let p = int_arg(p, focus, ctx)?.max(0) as u32;
+            Ok(match number_input(input)? {
+                None => vec![],
+                Some((d, _)) => vec![Value::Decimal(
+                    d.round_dp_with_strategy(p, RoundingStrategy::MidpointAwayFromZero),
+                )],
+            })
+        }
+        // domain errors (negative sqrt, non-positive logs) yield empty
+        ("sqrt", []) => Ok(match number_input(input)? {
+            None => vec![],
+            Some((d, _)) => d.sqrt().map(Value::Decimal).into_iter().collect(),
+        }),
+        ("exp", []) => Ok(match number_input(input)? {
+            None => vec![],
+            Some((d, _)) => d.checked_exp().map(Value::Decimal).into_iter().collect(),
+        }),
+        ("ln", []) => Ok(match number_input(input)? {
+            None => vec![],
+            Some((d, _)) if d <= Decimal::ZERO => vec![],
+            Some((d, _)) => vec![Value::Decimal(d.ln())],
+        }),
+        ("log", [base]) => {
+            let (b, _) = number_arg(base, focus, ctx)?;
+            Ok(match number_input(input)? {
+                None => vec![],
+                Some((d, _)) if d <= Decimal::ZERO || b <= Decimal::ZERO => vec![],
+                Some((d, _)) => d
+                    .ln()
+                    .checked_div(b.ln())
+                    .map(Value::Decimal)
+                    .into_iter()
+                    .collect(),
+            })
+        }
+        ("power", [e]) => {
+            let (exp, exp_int) = number_arg(e, focus, ctx)?;
+            Ok(match number_input(input)? {
+                None => vec![],
+                // fractional powers of negatives are not real numbers
+                Some((d, _)) if d < Decimal::ZERO && !exp_int => vec![],
+                Some((d, base_int)) => {
+                    let r = if exp_int {
+                        exp.to_i64().and_then(|i| d.checked_powi(i))
+                    } else {
+                        d.checked_powd(exp)
+                    };
+                    match r {
+                        None => vec![],
+                        Some(r) if base_int && exp_int && exp >= Decimal::ZERO => {
+                            int_or_decimal(r)
+                        }
+                        Some(r) => vec![Value::Decimal(r)],
+                    }
+                }
+            })
+        }
         _ => Err(Error::Eval(format!("unknown function: {name}"))),
     }
 }
@@ -239,6 +312,40 @@ fn map_str(input: &[Value], f: impl Fn(&str) -> Value) -> Result<Vec<Value>, Err
     Ok(match string_input(input)? {
         None => vec![],
         Some(s) => vec![f(s)],
+    })
+}
+
+// singleton numeric input; the bool tracks whether it was an Integer
+fn number_input(input: &[Value]) -> Result<Option<(Decimal, bool)>, Error> {
+    match eval::singleton(input)? {
+        None => Ok(None),
+        Some(Value::Integer(i)) => Ok(Some((Decimal::from(*i), true))),
+        Some(Value::Decimal(d)) => Ok(Some((*d, false))),
+        Some(other) => Err(Error::Eval(format!("expected a number, got {other:?}"))),
+    }
+}
+
+fn number_arg(expr: &Expr, focus: &[Value], ctx: &Ctx) -> Result<(Decimal, bool), Error> {
+    match eval::eval(expr, focus, ctx)?.as_slice() {
+        [Value::Integer(i)] => Ok((Decimal::from(*i), true)),
+        [Value::Decimal(d)] => Ok((*d, false)),
+        other => Err(Error::Eval(format!(
+            "expected a single numeric argument, got {other:?}"
+        ))),
+    }
+}
+
+fn int_or_decimal(d: Decimal) -> Vec<Value> {
+    match d.to_i64() {
+        Some(i) => vec![Value::Integer(i)],
+        None => vec![Value::Decimal(d)],
+    }
+}
+
+fn map_num_int(input: &[Value], f: impl Fn(Decimal) -> Decimal) -> Result<Vec<Value>, Error> {
+    Ok(match number_input(input)? {
+        None => vec![],
+        Some((d, _)) => int_or_decimal(f(d)),
     })
 }
 
