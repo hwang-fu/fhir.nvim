@@ -24,7 +24,7 @@ A searchable list of every resource in the document, each with a human-readable 
 
 ### Evaluate FHIRPath
 
-`:FhirEval name.given` runs a FHIRPath expression against the resource under the cursor and floats the result - one JSON value per line. `resolve()` follows references through the buffer, so `subject.resolve().name.given` works inside a Bundle. Powered by the Rust engine below; get it with `:FhirFetchEngine` (linux/macos) or `make build`.
+`:FhirEval name.given` runs a FHIRPath expression against the resource under the cursor and floats the result - one JSON value per line. `resolve()` follows references through the buffer, so `subject.resolve().name.given` works inside a Bundle. Powered by the Rust engine below; get it with `:FhirFetchEngine` (linux, apple-silicon macos) or `make build`.
 
 ## Requirements
 
@@ -94,7 +94,7 @@ interpreter - hand-written lexer and Pratt parser, tree-walking evaluator over
 a JSON model with exact decimals - powering `:FhirEval`.
 
 Getting the engine: `:FhirFetchEngine` downloads a prebuilt, SHA-256-verified
-binary for linux/macos (x86_64/aarch64) from the pinned release into Neovim's
+binary for linux (x86_64/aarch64) and apple-silicon macos from the pinned release into Neovim's
 data directory. On other platforms (or for development), `make build` compiles
 it from source - that is the only case needing a Rust toolchain.
 

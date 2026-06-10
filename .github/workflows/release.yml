@@ -21,9 +21,6 @@ jobs:
           - os: ubuntu-24.04-arm
             platform: linux-aarch64
             lib: libfhir_core.so
-          - os: macos-13
-            platform: macos-x86_64
-            lib: libfhir_core.dylib
           - os: macos-latest
             platform: macos-aarch64
             lib: libfhir_core.dylib

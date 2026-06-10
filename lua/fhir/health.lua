@@ -24,7 +24,7 @@ function M.check()
     vim.health.ok("FHIRPath engine loaded")
   else
     vim.health.warn("FHIRPath engine not available", {
-      ":FhirFetchEngine downloads a prebuilt engine (linux/macos releases).",
+      ":FhirFetchEngine downloads a prebuilt engine (linux, apple-silicon macos).",
       "Or build it with `make build` from the plugin directory.",
       ":FhirEval is unavailable without it; navigation works regardless.",
     })

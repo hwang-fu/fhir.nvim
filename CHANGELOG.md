@@ -21,9 +21,9 @@ FHIRPath evaluation in the editor, powered by a standalone Rust engine.
 - `resolve()` inside expressions follows references through the open buffer -
   `subject.resolve().name.given` works in a Bundle.
 - `:FhirFetchEngine [tag]`: download a prebuilt, checksum-verified engine for
-  linux/macos (x86_64/aarch64) into Neovim's data directory - no Rust
-  toolchain needed. `make build` remains for other platforms; `native.dir`
-  and `native.tag` config options control the lookup and the pin.
+  linux (x86_64/aarch64) or apple-silicon macos into Neovim's data directory -
+  no Rust toolchain needed. `make build` remains for other platforms;
+  `native.dir` and `native.tag` config options control the lookup and the pin.
 - `:checkhealth fhir` reports engine availability.
 
 ## [1.0.0] - 2026-06-09
