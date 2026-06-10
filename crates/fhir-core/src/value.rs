@@ -69,6 +69,27 @@ pub(crate) fn to_json(v: &Value) -> serde_json::Value {
     }
 }
 
+// A quantity, from a literal value or from FHIR data shaped like one
+// (an object with `value` and `code`-or-`unit`).
+pub(crate) fn as_quantity(v: &Value) -> Option<(Decimal, String)> {
+    match v {
+        Value::Quantity { value, unit } => Some((*value, unit.clone())),
+        Value::Complex { data, .. } => {
+            let value = match data.get("value")? {
+                serde_json::Value::Number(n) => n.to_string().parse().ok()?,
+                _ => return None,
+            };
+            let unit = data
+                .get("code")
+                .or_else(|| data.get("unit"))?
+                .as_str()?
+                .to_string();
+            Some((value, unit))
+        }
+        _ => None,
+    }
+}
+
 // `System.`-qualified and FHIR type names match case-insensitively; JSON cannot
 // distinguish FHIR string flavors, so code/uri/id are accepted as strings
 pub(crate) fn matches_type(v: &Value, name: &str) -> bool {
