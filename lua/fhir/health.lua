@@ -19,6 +19,15 @@ function M.check()
   end
 
   vim.health.ok("picker: vim.ui.select (dressing.nvim or telescope-ui-select add fuzzy filtering)")
+
+  if require("fhir.native").available() then
+    vim.health.ok("FHIRPath engine loaded")
+  else
+    vim.health.warn("FHIRPath engine not available", {
+      "Build it with `make build` from the plugin directory.",
+      ":FhirEval is unavailable without it; navigation works regardless.",
+    })
+  end
 end
 
 return M
