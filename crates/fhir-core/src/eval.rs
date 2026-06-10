@@ -143,6 +143,7 @@ fn binary(op: BinOp, lhs: Vec<Value>, rhs: Vec<Value>) -> Result<Vec<Value>, Err
             s.push_str(&concat_operand(&rhs)?);
             Value::String(s)
         }
+        _ => return Err(Error::Eval("not implemented".into())),
     };
     Ok(vec![result])
 }
