@@ -22,6 +22,10 @@ On a resource, list everything that references it - the inverse of go-to-referen
 
 A searchable list of every resource in the document, each with a human-readable label like `[Observation] Heart rate (id)`.
 
+### Evaluate FHIRPath
+
+`:FhirEval name.given` runs a FHIRPath expression against the resource under the cursor and floats the result - one JSON value per line. `resolve()` follows references through the buffer, so `subject.resolve().name.given` works inside a Bundle. Powered by the Rust engine below; needs the optional native module (`make build`).
+
 ## Requirements
 
 - Neovim **>= 0.10**
@@ -50,6 +54,7 @@ Open a FHIR `.json` / `.fhir.json` file; the plugin auto-attaches when the top-l
 | `:FhirGoto` | jump to the reference under the cursor |
 | `:FhirUsages` | list references to the resource under the cursor |
 | `:FhirOutline` | pick any resource and jump to it |
+| `:FhirEval [expr]` | evaluate a FHIRPath expression (prompts without args) |
 | `:FhirEnable` / `:FhirDisable` | attach / detach the current buffer |
 
 No keymaps are set by default. Opt in through `setup()`:
@@ -60,6 +65,7 @@ require("fhir").setup({
     goto_reference = "gd",
     find_usages    = "gr",
     outline        = "<leader>fo",
+    eval           = "<leader>fe",
   },
 })
 ```
@@ -69,7 +75,8 @@ require("fhir").setup({
 | Option | Default | Description |
 |---|---|---|
 | `detection` | `"auto"` | `"auto"` attaches FHIR JSON buffers automatically; `"manual"` requires `:FhirEnable`. |
-| `keymaps` | `{}` | Opt-in buffer-local maps: `goto_reference`, `find_usages`, `outline`. |
+| `keymaps` | `{}` | Opt-in buffer-local maps: `goto_reference`, `find_usages`, `outline`, `eval`. |
+| `native.dir` | plugin `.tests/` | Directory containing the built `fhir_core` module (where `make build` puts it). |
 
 See `:help fhir` for the full reference.
 
@@ -83,8 +90,8 @@ See `:help fhir` for the full reference.
 
 The `crates/` workspace contains **`fhir-core`**, a standalone Rust FHIRPath
 interpreter - hand-written lexer and Pratt parser, tree-walking evaluator over
-a JSON model with exact decimals - that will power in-editor FHIRPath
-evaluation. It is not wired into the editor yet.
+a JSON model with exact decimals - powering `:FhirEval`. Build the native
+module with `make build` (prebuilt binaries are not shipped yet).
 
 Honesty over checklists: the engine is measured against the **official
 FHIRPath conformance suite** (vendored under
