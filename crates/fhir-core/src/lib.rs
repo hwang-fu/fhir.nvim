@@ -433,4 +433,41 @@ mod tests {
             Value::Boolean(true)
         );
     }
+
+    #[test]
+    fn string_functions() {
+        assert_eq!(ev1(PATIENT, "'hello'.length()"), Value::Integer(5));
+        assert_eq!(ev1(PATIENT, "'hello'.upper()"), Value::String("HELLO".into()));
+        assert_eq!(ev1(PATIENT, "'HELLO'.lower()"), Value::String("hello".into()));
+        assert_eq!(ev1(PATIENT, "'hello'.startsWith('he')"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "'hello'.endsWith('lo')"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "'hello'.contains('ell')"), Value::Boolean(true));
+        assert_eq!(ev1(PATIENT, "'hello'.substring(1)"), Value::String("ello".into()));
+        assert_eq!(ev1(PATIENT, "'hello'.substring(1, 3)"), Value::String("ell".into()));
+        assert!(ev(PATIENT, "'hello'.substring(9)").is_empty());
+        assert_eq!(ev1(PATIENT, "'hello'.indexOf('ll')"), Value::Integer(2));
+        assert_eq!(ev1(PATIENT, "'hello'.indexOf('x')"), Value::Integer(-1));
+        assert_eq!(
+            ev1(PATIENT, "'hello'.replace('l', 'L')"),
+            Value::String("heLLo".into())
+        );
+        assert_eq!(ev1(PATIENT, "'  hi  '.trim()"), Value::String("hi".into()));
+        assert_eq!(ev1(PATIENT, "'a,b,c'.split(',').count()"), Value::Integer(3));
+        assert_eq!(
+            ev1(PATIENT, "name.given.join('-')"),
+            Value::String("Peter-James-Jim".into())
+        );
+        assert_eq!(ev1(PATIENT, "'abc'.toChars().count()"), Value::Integer(3));
+        assert_eq!(ev1(PATIENT, "'hello'.matches('^h.*o$')"), Value::Boolean(true));
+        assert_eq!(
+            ev1(PATIENT, "'hello'.replaceMatches('l+', 'L')"),
+            Value::String("heLo".into())
+        );
+        // empty input propagates; bad regex errors
+        assert!(ev(PATIENT, "nothing.upper()").is_empty());
+        assert!(matches!(
+            evaluate(PATIENT, "'x'.matches('(')"),
+            Err(Error::Eval(_))
+        ));
+    }
 }
