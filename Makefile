@@ -15,7 +15,11 @@ CARGO        ?= cargo
 CDYLIB       := target/release/libfhir_core.so
 NATIVE       := $(SCRATCH)/fhir_core.so
 
-.PHONY: all test lint clean build
+SCHEMA_CACHE := $(SCRATCH)/r4-definitions
+SCHEMA_BASE  := https://hl7.org/fhir/R4
+SCHEMA_OUT   := crates/fhir-core/src/schema/generated.rs
+
+.PHONY: all test lint clean build schema
 
 all: lint test
 
@@ -33,6 +37,12 @@ build:
 	$(CARGO) build --release
 	mkdir -p $(SCRATCH)
 	cp $(CDYLIB) $(NATIVE)
+
+schema:
+	mkdir -p $(SCHEMA_CACHE)
+	curl -fsSL -o $(SCHEMA_CACHE)/profiles-types.json $(SCHEMA_BASE)/profiles-types.json
+	curl -fsSL -o $(SCHEMA_CACHE)/profiles-resources.json $(SCHEMA_BASE)/profiles-resources.json
+	$(CARGO) run -p fhir-schema-gen -- $(SCHEMA_CACHE)/profiles-types.json $(SCHEMA_CACHE)/profiles-resources.json $(SCHEMA_OUT) "$(SCHEMA_BASE) definitions, fetched $$(date -u +%Y-%m-%d)"
 
 clean:
 	rm -rf $(SCRATCH)
