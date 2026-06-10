@@ -71,6 +71,9 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: cargo build (native module)
+        run: cargo build -p fhir-core-lua
+
       - name: cargo test
         run: cargo test -p fhir-core
 
