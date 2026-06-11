@@ -41,4 +41,9 @@ function M.eval(expr)
   require("fhir.features.eval").run(expr)
 end
 
+-- Public API: validate the buffer's FHIR document into diagnostics.
+function M.validate()
+  require("fhir.features.validate").run()
+end
+
 return M

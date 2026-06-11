@@ -5,6 +5,34 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.0.0] - unreleased
+
+Validation: open a FHIR document and see what is wrong with it, inline.
+
+### Added
+
+- `:FhirValidate` validates the buffer's document against the R4
+  definitions - structure (unknown elements, cardinality, value types,
+  primitive formats, choice elements) and constraint invariants evaluated
+  as FHIRPath - and publishes every finding as a `vim.diagnostic` entry at
+  the offending element, with the spec's severities. `:FhirValidate!`
+  clears the findings.
+- Automatic re-validation on save for attached buffers (`validate.on_save`,
+  default `true`; quietly skipped when the engine is absent).
+- Invariants resolve references through the buffer, like `:FhirEval`;
+  expressions beyond the engine's measured subset are skipped, never
+  guessed.
+- The schema behind the checks is generated from the official R4
+  definitions; the validator is measured against the official R4 example
+  corpus (2911 documents, 100% clean or documented) as a ratcheting CI
+  floor.
+- `validate(json)` in the native module - an issue array as JSON, with the
+  same nil+message error convention as `eval`.
+
+### Changed
+
+- The default engine release pin (`native.tag`) is `v3.0.0`.
+
 ## [2.2.0] - 2026-06-11
 
 Date and quantity arithmetic; conformance reaches 57.2% of the official

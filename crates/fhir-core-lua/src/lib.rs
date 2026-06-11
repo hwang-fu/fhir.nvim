@@ -31,5 +31,18 @@ fn fhir_core(lua: &Lua) -> Result<Table> {
             },
         )?,
     )?;
+    exports.set(
+        "validate",
+        lua.create_function(|_, (json, resolver): (String, Option<Function>)| {
+            let engine = match resolver {
+                Some(f) => Engine::new().with_resolver(Box::new(LuaResolver(f))),
+                None => Engine::new(),
+            };
+            Ok(match engine.validate_json(&json) {
+                Ok(result) => (Some(result), None),
+                Err(e) => (None, Some(e.to_string())),
+            })
+        })?,
+    )?;
     Ok(exports)
 }

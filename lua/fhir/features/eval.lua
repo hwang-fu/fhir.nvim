@@ -17,22 +17,6 @@ local function resource_at(idx, row, col)
   return nil
 end
 
--- The resolve() callback handed across to the engine: a raw reference string
--- in, the target resource's JSON text (or nil) back. `owner` makes contained
--- (#id) references resolvable.
-local function make_resolver(idx, owner)
-  return function(ref)
-    local occ = { raw = ref, flavor = index.flavor(ref), owner = owner }
-    local loc = resolver.resolve(occ, idx)
-    if not loc then
-      return nil
-    end
-    local r = loc.range
-    local text = vim.api.nvim_buf_get_text(loc.bufnr, r[1], r[2], r[3], r[4], {})
-    return table.concat(text, "\n")
-  end
-end
-
 -- Evaluate `expr` against the resource under the cursor; prompt when absent.
 function M.run(expr)
   if not expr or expr == "" then
@@ -54,7 +38,7 @@ function M.run(expr)
   end
 
   local json = vim.treesitter.get_node_text(res.node, buf)
-  local result, err = native.eval(json, expr, make_resolver(idx, res))
+  local result, err = native.eval(json, expr, resolver.callback(idx, res))
   if err then
     ui.notify(err, vim.log.levels.ERROR)
     return

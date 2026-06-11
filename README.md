@@ -26,6 +26,10 @@ A searchable list of every resource in the document, each with a human-readable 
 
 `:FhirEval name.given` runs a FHIRPath expression against the resource under the cursor and floats the result - one JSON value per line. `resolve()` follows references through the buffer, so `subject.resolve().name.given` works inside a Bundle. Powered by the Rust engine below; get it with `:FhirFetchEngine` (linux, apple-silicon macos) or `make build`.
 
+### Validate
+
+`:FhirValidate` checks the whole document against the R4 definitions - structure (unknown elements, cardinality, types, primitive formats, choice elements) and constraint invariants - and puts every finding into `vim.diagnostic`: signs, virtual text, `]d` navigation. Severities follow the spec (a missing required element is an error; "should have narrative" is a warning). Attached buffers re-validate on save; `:FhirValidate!` clears the findings. Same engine, same graceful degradation when it's absent.
+
 ## Requirements
 
 - Neovim **>= 0.10**
@@ -55,6 +59,7 @@ Open a FHIR `.json` / `.fhir.json` file; the plugin auto-attaches when the top-l
 | `:FhirUsages` | list references to the resource under the cursor |
 | `:FhirOutline` | pick any resource and jump to it |
 | `:FhirEval [expr]` | evaluate a FHIRPath expression (prompts without args) |
+| `:FhirValidate[!]` | validate the document into diagnostics (`!` clears them) |
 | `:FhirEnable` / `:FhirDisable` | attach / detach the current buffer |
 
 No keymaps are set by default. Opt in through `setup()`:
@@ -66,6 +71,7 @@ require("fhir").setup({
     find_usages    = "gr",
     outline        = "<leader>fo",
     eval           = "<leader>fe",
+    diagnostics    = "gl",   -- show the finding under the cursor in a float
   },
 })
 ```
@@ -75,9 +81,10 @@ require("fhir").setup({
 | Option | Default | Description |
 |---|---|---|
 | `detection` | `"auto"` | `"auto"` attaches FHIR JSON buffers automatically; `"manual"` requires `:FhirEnable`. |
-| `keymaps` | `{}` | Opt-in buffer-local maps: `goto_reference`, `find_usages`, `outline`, `eval`. |
+| `keymaps` | `{}` | Opt-in buffer-local maps: `goto_reference`, `find_usages`, `outline`, `eval`, `diagnostics`. |
 | `native.dir` | unset | Explicit directory containing the `fhir_core` module; overrides the search below. |
 | `native.tag` | current release | Which engine release `:FhirFetchEngine` installs and the loader looks for. |
+| `validate.on_save` | `true` | Re-validate attached buffers after each write (needs the engine). |
 
 See `:help fhir` for the full reference.
 
@@ -87,7 +94,7 @@ See `:help fhir` for the full reference.
 - Resolves relative, absolute-URL, `urn:uuid:`, and `contained` references. References by `identifier` and conditional references are **not** resolved.
 - Resolution is **single-buffer**; cross-file and live-server resolution are future work.
 
-## FHIRPath engine (in development)
+## FHIRPath & validation engine (in development)
 
 The `crates/` workspace contains **`fhir-core`**, a standalone Rust FHIRPath
 interpreter - hand-written lexer and Pratt parser, tree-walking evaluator over
@@ -139,11 +146,13 @@ output, and the rate is a ratcheting floor in CI.
 
 ## Roadmap
 
-v1 is navigation, in pure Lua. In progress or planned:
+Shipped so far: navigation (pure Lua), FHIRPath evaluation, and validation
+diagnostics - the Rust engine reaching the editor through a native module
+with graceful degradation when it is absent. Ahead:
 
-- **FHIRPath evaluation** in the editor - the Rust engine above, exposed
-  through a native module with graceful degradation when it is absent.
-- **Validation & diagnostics** against R4 structure rules and constraints.
+- **Workspace awareness** - cross-file reference resolution and
+  workspace-wide validation.
+- **Quick fixes** - code actions for common findings.
 
 ## Development
 

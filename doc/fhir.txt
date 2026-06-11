@@ -33,7 +33,8 @@ throws on malformed input.
   |:checkhealth| reports whether it is present.
 - Optional: `dressing.nvim` or `telescope-ui-select` give |vim.ui.select| a
   fuzzy picker, which the outline and find-usages lists use.
-- Optional: the native FHIRPath engine powers |:FhirEval|. Get it with
+- Optional: the native FHIRPath engine powers |:FhirEval| and
+  |:FhirValidate|. Get it with
   |:FhirFetchEngine| (prebuilt for linux and apple-silicon macos), or build it
   from the plugin directory with `make build` (needs a Rust toolchain).
   Everything else works without it.
@@ -80,6 +81,9 @@ keymaps                         table (default {})
           find_usages      mapping for |:FhirUsages|
           outline          mapping for |:FhirOutline|
           eval             mapping for |:FhirEval| (opens the prompt)
+          diagnostics      show the finding under the cursor in a float
+                           (|vim.diagnostic.open_float()|; Neovim also maps
+                           CTRL-W_d to this globally)
 
         Example (a suggestion, not a default): >lua
             require("fhir").setup({
@@ -88,6 +92,7 @@ keymaps                         table (default {})
                 find_usages    = "gr",
                 outline        = "<leader>fo",
                 eval           = "<leader>fe",
+                diagnostics    = "gl",
               },
             })
 <
@@ -102,6 +107,14 @@ native                          table
           tag    The engine release |:FhirFetchEngine| installs and the
                  loader looks for. Defaults to the release matching the
                  plugin version.
+
+                                                            *fhir-opt-validate*
+validate                        table
+        Settings for validation diagnostics.
+          on_save   boolean (default true). Re-validate an attached buffer
+                    after every write, publishing the findings to
+                    |vim.diagnostic|. Quietly does nothing when the engine
+                    is absent.
 ==============================================================================
 5. Commands                                                  *fhir-commands*
 
@@ -126,6 +139,16 @@ The feature commands are buffer-local: they exist only in attached buffers.
         resource's identity (`q`, `<Esc>`, or leaving the window closes it).
         Without {expr}, prompts for one. Requires the native engine (see
         |fhir-requirements|); without it a notice explains how to build it.
+
+:FhirValidate[!]                                              *:FhirValidate*
+        Validate the buffer's FHIR document (the top-level resource,
+        entries included) against the R4 definitions and publish every
+        finding as a |vim.diagnostic| entry: structure errors (unknown
+        elements, cardinality, value types, primitive formats, choice
+        elements) and constraint invariants, each placed at the offending
+        element with its declared severity. With [!], clears the findings
+        instead. Requires the native engine (see |fhir-requirements|);
+        without it a notice explains how to get it.
 
 :FhirEnable                                                      *:FhirEnable*
         Attach fhir.nvim to the current buffer. Useful when `detection` is
@@ -175,6 +198,19 @@ FHIRPath evaluation ~
         FHIRPath; see the README for the supported functions and the measured
         conformance rate.
 
+Validation ~
+        |:FhirValidate| checks the document against schema tables generated
+        from the official R4 definitions. Findings land in a diagnostics
+        namespace, so signs, virtual text, |]d| navigation, and
+        |vim.diagnostic.setqflist()| work out of the box. Severities follow
+        the spec: structural violations are errors, while invariants carry
+        their declared severity (`dom-6` "a resource should have narrative"
+        is a warning, for example). Invariants run on the FHIRPath engine
+        with the same in-buffer reference resolution |:FhirEval| uses;
+        expressions beyond the engine's measured subset are skipped, never
+        guessed. Attached buffers re-validate on every write by default
+        (|fhir-opt-validate|).
+
 ==============================================================================
 7. Health                                                      *fhir-health*
 
@@ -188,7 +224,10 @@ parser, the picker, and the FHIRPath engine.
 - References by `identifier` and conditional references are not resolved.
 - Resolution is single-buffer; cross-file (workspace) and live-server
   resolution are not supported.
-- FHIRPath coverage is a measured subset (no arithmetic, string/math/
-  conversion functions, or type reflection yet); see the README.
+- FHIRPath coverage is a measured subset (no unit conversion, %variables,
+  or type reflection); the README publishes the conformance rate.
+- Validation targets R4 structure and invariants; profiles, slicing, and
+  terminology bindings are not checked. Invariant expressions beyond the
+  engine's subset are skipped silently rather than guessed.
 
 vim:tw=78:ts=8:et:ft=help:norl:
