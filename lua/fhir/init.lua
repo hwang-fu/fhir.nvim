@@ -10,6 +10,9 @@ function M.setup(opts)
     vim.api.nvim_create_user_command("FhirEnable", function()
       require("fhir.detect").attach(0)
     end, { desc = "Enable fhir.nvim for the current buffer" })
+    vim.api.nvim_create_user_command("FhirWorkspaceOutline", function()
+      require("fhir.features.outline").run_workspace()
+    end, { desc = "Pick a FHIR resource from the whole workspace and jump to it" })
     vim.api.nvim_create_user_command(
       "FhirFetchEngine",
       function(cmd)

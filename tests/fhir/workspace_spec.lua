@@ -90,6 +90,18 @@ describe("workspace", function()
     assert.is_nil(idx.by_identity["Patient/a"])
   end)
 
+  it("labels indexed resources like the buffer outline", function()
+    local idx = workspace.index(FIX)
+    local labels = {}
+    for _, r in ipairs(idx.resources) do
+      labels[r.identity] = r.label
+    end
+    assert.are.equal("[Observation] Heart rate (o1)", labels["Observation/o1"])
+    assert.are.equal("[Patient] Doe (p1)", labels["Patient/p1"])
+    assert.are.equal("Medication/m1", labels["Medication/m1"]) -- fallback
+    assert.are.equal("MedicationRequest/r1", labels["MedicationRequest/r1"])
+  end)
+
   it("replaces the ignore list wholesale when configured", function()
     require("fhir.config").setup({ workspace = { ignore = { "patients" } } })
     local ws = require("fhir.config").get().workspace

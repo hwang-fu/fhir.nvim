@@ -26,6 +26,29 @@ describe("outline", function()
     )
   end)
 
+  it("lists the whole workspace and jumps on selection", function()
+    local root = h.workspace_clone()
+    local buf = h.open_file(root .. "/patients/alice.json")
+    vim.api.nvim_win_set_buf(0, buf)
+    local items
+    local orig = vim.ui.select
+    vim.ui.select = function(list, _, cb)
+      items = list
+      for _, item in ipairs(list) do
+        if item.label:match("Heart rate") then
+          cb(item)
+          return
+        end
+      end
+    end
+    outline.run_workspace()
+    vim.ui.select = orig
+    assert.are.equal(4, #items) -- alice, hr, and the two bundle entries
+    assert.are.equal(root .. "/observations/hr.json", vim.api.nvim_buf_get_name(0))
+    require("fhir.config").setup({})
+    require("fhir.workspace")._reset()
+  end)
+
   it("notifies when the buffer has no resources", function()
     local buf = h.buf("")
     vim.api.nvim_win_set_buf(0, buf)

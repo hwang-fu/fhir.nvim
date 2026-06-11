@@ -26,6 +26,30 @@ describe("usages", function()
     )
   end)
 
+  it("lists referrers from other files", function()
+    local root = h.workspace_clone()
+    local buf = h.open_file(root .. "/patients/alice.json")
+    cursor_in_resource(buf, "Patient/p1")
+
+    local items
+    local orig = vim.ui.select
+    vim.ui.select = function(list, _, cb)
+      items = list
+      cb(list[1])
+    end
+    usages.run()
+    vim.ui.select = orig
+
+    -- bundle.json's MedicationRequest subject + hr.json's subject
+    assert.are.equal(2, #items)
+    assert.is_not_nil(items[1].label:match("bundle%.json"))
+    assert.is_not_nil(items[2].label:match("hr%.json"))
+    -- selecting the first jumped into bundle.json
+    assert.are.equal(root .. "/bundle.json", vim.api.nvim_buf_get_name(0))
+    require("fhir.config").setup({})
+    require("fhir.workspace")._reset()
+  end)
+
   it("notifies when the resource has no usages", function()
     local buf = h.fixture_buf("bundle_urn.json")
     cursor_in_resource(buf, "Observation/o1") -- nothing references o1
