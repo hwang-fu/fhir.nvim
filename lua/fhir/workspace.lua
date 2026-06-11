@@ -43,7 +43,104 @@ function M.files(root)
   return found, clipped
 end
 
+-- Per-file records cached by mtime: only changed files re-decode.
+local records = {}
+
+-- Identities a decoded document exposes: the root Type/id, plus each
+-- Bundle entry's fullUrl and entry resource Type/id.
+local function identities_of(doc)
+  local ids = {}
+  if type(doc.id) == "string" then
+    ids[#ids + 1] = doc.resourceType .. "/" .. doc.id
+  end
+  if doc.resourceType == "Bundle" and type(doc.entry) == "table" then
+    for _, e in ipairs(doc.entry) do
+      if type(e) == "table" then
+        if type(e.fullUrl) == "string" then
+          ids[#ids + 1] = e.fullUrl
+        end
+        local r = e.resource
+        if type(r) == "table" and type(r.resourceType) == "string" and type(r.id) == "string" then
+          ids[#ids + 1] = r.resourceType .. "/" .. r.id
+        end
+      end
+    end
+  end
+  return ids
+end
+
+-- Every reference string in the document, except contained (#) ones -
+-- those can never point outside their own file.
+local function references_of(value, out)
+  if type(value) ~= "table" then
+    return out
+  end
+  for k, v in pairs(value) do
+    if k == "reference" and type(v) == "string" then
+      if not vim.startswith(v, "#") then
+        out[#out + 1] = v
+      end
+    else
+      references_of(v, out)
+    end
+  end
+  return out
+end
+
+-- nil when the file is unreadable, unparseable, or not a FHIR resource.
+local function record(path)
+  local ok_read, lines = pcall(vim.fn.readfile, path)
+  if not ok_read then
+    return nil
+  end
+  local ok, doc = pcall(vim.json.decode, table.concat(lines, "\n"))
+  if not ok or type(doc) ~= "table" or type(doc.resourceType) ~= "string" then
+    return nil
+  end
+  return { identities = identities_of(doc), references = references_of(doc, {}) }
+end
+
+-- The identity/reference index for a root. Candidates are listed fresh
+-- each call; per-file records are reused unless the file's mtime moved.
+function M.index(root)
+  local files, clipped = M.files(root)
+  local by_identity, references = {}, {}
+  local skipped = 0
+  for _, f in ipairs(files) do
+    local stat = vim.uv.fs_stat(f)
+    local mtime = stat and stat.mtime.sec or -1
+    local cached = records[f]
+    if not cached or cached.mtime ~= mtime then
+      cached = { mtime = mtime, data = record(f) }
+      records[f] = cached
+    end
+    if cached.data then
+      for _, id in ipairs(cached.data.identities) do
+        local list = by_identity[id] or {}
+        list[#list + 1] = f
+        by_identity[id] = list
+      end
+      if #cached.data.references > 0 then
+        references[f] = cached.data.references
+      end
+    else
+      skipped = skipped + 1
+    end
+  end
+  for _, list in pairs(by_identity) do
+    table.sort(list) -- deterministic collision order
+  end
+  return {
+    by_identity = by_identity,
+    references = references,
+    skipped = skipped,
+    clipped = clipped,
+  }
+end
+
 -- Drop cached state (the test seam).
-function M._reset() end
+function M._reset()
+  records = {}
+end
 
 return M
