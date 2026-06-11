@@ -25,6 +25,27 @@ describe("goto", function()
     assert.are.same({ target.range[1] + 1, target.range[2] }, vim.api.nvim_win_get_cursor(0))
   end)
 
+  it("jumps into another file through the workspace", function()
+    local root = h.workspace_clone()
+    local buf = h.open_file(root .. "/observations/hr.json")
+    vim.api.nvim_win_set_buf(0, buf)
+    local refs = require("fhir.index").get(buf).references
+    local r = refs[1].location.range
+    vim.api.nvim_win_set_cursor(0, { r[1] + 1, r[2] + 1 })
+
+    goto_ref.run()
+
+    local landed = vim.api.nvim_get_current_buf()
+    assert.are.equal(root .. "/patients/alice.json", vim.api.nvim_buf_get_name(landed))
+    local target = require("fhir.index").get(landed).resources[1]
+    assert.are.same(
+      { target.location.range[1] + 1, target.location.range[2] },
+      vim.api.nvim_win_get_cursor(0)
+    )
+    require("fhir.config").setup({})
+    require("fhir.workspace")._reset()
+  end)
+
   it("notifies (no move, no throw) on an unresolvable reference", function()
     on_reference("unresolvable.json", "relative")
     local before = vim.api.nvim_win_get_cursor(0)
