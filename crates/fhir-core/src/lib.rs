@@ -62,6 +62,12 @@ impl Engine {
         let rendered: Vec<serde_json::Value> = values.iter().map(value::to_json).collect();
         serde_json::to_string(&rendered).map_err(|e| Error::Eval(format!("render: {e}")))
     }
+
+    /// Like [`validate`], but constraint expressions that resolve references
+    /// do so through the engine's resolver.
+    pub fn validate(&self, resource_json: &str) -> Result<Vec<Issue>, Error> {
+        validate::run(resource_json, self.resolver.as_deref())
+    }
 }
 
 #[cfg(test)]
