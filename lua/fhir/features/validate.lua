@@ -1,5 +1,6 @@
 local index = require("fhir.index")
 local native = require("fhir.native")
+local parse = require("fhir.parse")
 local pathmap = require("fhir.pathmap")
 local resolver = require("fhir.resolver")
 local ui = require("fhir.ui")
@@ -15,17 +16,27 @@ local severities = {
 }
 
 -- Validate the buffer's top-level document and publish the findings.
+-- The whole document, not the resource under the cursor: in a Bundle the
+-- index lists the entries, but findings anchor at the document root.
 function M.run()
   local buf = vim.api.nvim_get_current_buf()
   local idx = index.get(buf)
-  local res = idx.resources[1]
-  if not res then
+  local root = parse.root(buf)
+  if not root or #idx.resources == 0 then
     ui.notify("no resource in this buffer", vim.log.levels.INFO)
     return
   end
+  -- when the document is itself an indexed resource, passing it as the
+  -- resolver's owner makes its contained (#id) references resolvable
+  local owner
+  for _, r in ipairs(idx.resources) do
+    if r.node == root then
+      owner = r
+    end
+  end
 
-  local json = vim.treesitter.get_node_text(res.node, buf)
-  local result, err = native.validate(json, resolver.callback(idx, res))
+  local json = vim.treesitter.get_node_text(root, buf)
+  local result, err = native.validate(json, resolver.callback(idx, owner))
   if err then
     ui.notify(err, vim.log.levels.ERROR)
     return
@@ -33,7 +44,7 @@ function M.run()
 
   local diags = {}
   for _, issue in ipairs(vim.json.decode(result)) do
-    local r = pathmap.range(res.node, buf, issue.path)
+    local r = pathmap.range(root, buf, issue.path)
     diags[#diags + 1] = {
       lnum = r[1],
       col = r[2],
