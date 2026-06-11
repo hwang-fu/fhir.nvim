@@ -71,6 +71,7 @@ require("fhir").setup({
     find_usages    = "gr",
     outline        = "<leader>fo",
     eval           = "<leader>fe",
+    diagnostics    = "gl",   -- show the finding under the cursor in a float
   },
 })
 ```
@@ -80,7 +81,7 @@ require("fhir").setup({
 | Option | Default | Description |
 |---|---|---|
 | `detection` | `"auto"` | `"auto"` attaches FHIR JSON buffers automatically; `"manual"` requires `:FhirEnable`. |
-| `keymaps` | `{}` | Opt-in buffer-local maps: `goto_reference`, `find_usages`, `outline`, `eval`. |
+| `keymaps` | `{}` | Opt-in buffer-local maps: `goto_reference`, `find_usages`, `outline`, `eval`, `diagnostics`. |
 | `native.dir` | unset | Explicit directory containing the `fhir_core` module; overrides the search below. |
 | `native.tag` | current release | Which engine release `:FhirFetchEngine` installs and the loader looks for. |
 | `validate.on_save` | `true` | Re-validate attached buffers after each write (needs the engine). |
