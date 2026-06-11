@@ -90,3 +90,60 @@ describe("fix catalog", function()
     assert.is_true(doc.active)
   end)
 end)
+
+describe("fix flow", function()
+  it("fixes the finding under the cursor and re-validates", function()
+    package.loaded["fhir.native"] = {
+      available = function()
+        return true
+      end,
+      validate = function(json)
+        if json:find("favouriteColor", 1, true) then
+          return vim.json.encode({
+            {
+              path = "Patient.favouriteColor",
+              category = "unknown",
+              severity = "error",
+              message = '"favouriteColor" is not an element of Patient',
+            },
+          }),
+            nil
+        end
+        return "[]", nil
+      end,
+    }
+    package.loaded["fhir.features.validate"] = nil
+    package.loaded["fhir.features.fix"] = nil
+    local validate = require("fhir.features.validate")
+    local flow_fix = require("fhir.features.fix")
+
+    local buf = h.buf('{"resourceType":"Patient","favouriteColor":"blue"}')
+    vim.api.nvim_win_set_buf(0, buf)
+    validate.run()
+    local d = vim.diagnostic.get(buf)[1]
+    vim.api.nvim_win_set_cursor(0, { d.lnum + 1, d.col })
+
+    flow_fix.run() -- a single fix applies without a picker
+
+    local doc = vim.json.decode(table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n"))
+    assert.is_nil(doc.favouriteColor)
+    assert.are.same({}, vim.diagnostic.get(buf)) -- re-validated clean
+
+    package.loaded["fhir.native"] = nil
+    package.loaded["fhir.features.validate"] = nil
+    package.loaded["fhir.features.fix"] = nil
+  end)
+
+  it("notifies when nothing on the line is fixable", function()
+    local buf = h.buf('{"resourceType":"Patient"}')
+    vim.api.nvim_win_set_buf(0, buf)
+    local ui = require("fhir.ui")
+    local orig, msg = ui.notify, nil
+    ui.notify = function(m)
+      msg = m
+    end
+    fix.run()
+    ui.notify = orig
+    assert.is_not_nil(msg:match("[Nn]o"))
+  end)
+end)
