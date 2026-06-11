@@ -100,6 +100,36 @@ describe("validate feature", function()
     assert.is_not_nil(notified:match("not available"))
   end)
 
+  it("validates the whole document, not the first indexed resource", function()
+    local BUNDLE = [[{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    { "resource": { "resourceType": "Patient", "id": "p1" } }
+  ]
+}]]
+    fake_native.validate = function(json)
+      fake_native.seen = { json = json }
+      return vim.json.encode({
+        {
+          path = "Bundle.entry[0].resource",
+          severity = "warning",
+          category = "invariant",
+          message = "dom-6: A resource should have narrative for robust management",
+        },
+      }),
+        nil
+    end
+    local bbuf = h.buf(BUNDLE)
+    vim.api.nvim_win_set_buf(0, bbuf)
+    feature.run()
+    -- the Bundle itself crossed the seam, not its first entry
+    assert.is_not_nil(fake_native.seen.json:find('"Bundle"', 1, true))
+    local diags = vim.diagnostic.get(bbuf)
+    assert.are.equal(1, #diags)
+    assert.are.equal(4, diags[1].lnum) -- the entry's "resource" key
+  end)
+
   it("revalidates on write when attached and enabled", function()
     require("fhir.config").setup({})
     require("fhir.detect").attach(buf)
