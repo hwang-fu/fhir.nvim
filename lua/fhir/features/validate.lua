@@ -17,15 +17,17 @@ local severities = {
   information = vim.diagnostic.severity.INFO,
 }
 
--- Validate the buffer's top-level document and publish the findings.
+-- Validate a buffer's top-level document and publish the findings.
 -- The whole document, not the resource under the cursor: in a Bundle the
 -- index lists the entries, but findings anchor at the document root.
-function M.run()
-  local buf = vim.api.nvim_get_current_buf()
+-- `quiet` suppresses the notifications (the workspace sweep's refresh).
+local function publish(buf, quiet)
   local idx = index.get(buf)
   local root = parse.root(buf)
   if not root or #idx.resources == 0 then
-    ui.notify("no resource in this buffer", vim.log.levels.INFO)
+    if not quiet then
+      ui.notify("no resource in this buffer", vim.log.levels.INFO)
+    end
     return
   end
   -- when the document is itself an indexed resource, passing it as the
@@ -40,7 +42,9 @@ function M.run()
   local json = vim.treesitter.get_node_text(root, buf)
   local result, err = native.validate(json, resolver.callback(idx, owner))
   if err then
-    ui.notify(err, vim.log.levels.ERROR)
+    if not quiet then
+      ui.notify(err, vim.log.levels.ERROR)
+    end
     return
   end
 
@@ -58,6 +62,11 @@ function M.run()
     }
   end
   vim.diagnostic.set(ns, buf, diags)
+end
+
+-- Validate the current buffer's document and publish the findings.
+function M.run()
+  publish(vim.api.nvim_get_current_buf())
 end
 
 -- Drop a buffer's findings (the current buffer when unspecified).
@@ -121,6 +130,16 @@ function M.run_workspace(scope)
   end
 
   vim.fn.setqflist({}, " ", { title = "FHIR workspace validation", items = entries })
+
+  -- buffers already open get their live view refreshed too (their own
+  -- text, full resolver fidelity - the editor's view of a file wins)
+  for _, f in ipairs(files) do
+    local buf = vim.fn.bufnr(f)
+    if buf ~= -1 and vim.fn.bufloaded(buf) == 1 and vim.b[buf].fhir_attached then
+      publish(buf, true)
+    end
+  end
+
   local summary = ("%d files validated, %d skipped: %d errors, %d warnings, %d informational"):format(
     #files - skipped,
     skipped,
