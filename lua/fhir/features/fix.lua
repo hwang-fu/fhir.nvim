@@ -123,11 +123,13 @@ function M.run()
   local buf = vim.api.nvim_get_current_buf()
   local validate = require("fhir.features.validate")
   local row = vim.api.nvim_win_get_cursor(0)[1] - 1
-  local diags = vim.diagnostic.get(buf, { namespace = validate.namespace, lnum = row })
+  -- filter by line ourselves: get()'s lnum filter is not reliable across
+  -- versions, and the e2e caught it returning the whole buffer
+  local diags = vim.diagnostic.get(buf, { namespace = validate.namespace })
 
   local fixes = {}
   for _, d in ipairs(diags) do
-    if d.user_data then
+    if d.lnum == row and d.user_data then
       for _, f in ipairs(M.fixes_for(buf, d.user_data)) do
         fixes[#fixes + 1] = f
       end
