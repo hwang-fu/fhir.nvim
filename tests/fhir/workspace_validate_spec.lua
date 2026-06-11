@@ -87,6 +87,16 @@ describe("workspace validation", function()
     assert.is_not_nil(last:match("copen"))
   end)
 
+  it("refreshes diagnostics of open attached buffers", function()
+    local buf = h.open_file(root .. "/patients/alice.json")
+    require("fhir.detect").attach(buf)
+    feature.run_workspace()
+    local diags = vim.diagnostic.get(buf)
+    assert.are.equal(1, #diags) -- the buffer path keeps every severity
+    assert.are.equal(vim.diagnostic.severity.WARN, diags[1].severity)
+    require("fhir.detect").detach(buf)
+  end)
+
   it("aborts with a notice when the engine is absent", function()
     package.loaded["fhir.native"].available = function()
       return false
