@@ -4,7 +4,7 @@
 use crate::error::Error;
 use crate::eval::{self, Ctx};
 use crate::schema::{self, Element, Severity, TypeDef};
-use crate::{parser, value, Resolve};
+use crate::{Resolve, parser, value};
 use regex_lite::Regex;
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -26,6 +26,31 @@ pub enum Category {
     Format,
     Choice,
     Invariant,
+}
+
+impl Issue {
+    // the wire form for foreign callers: four flat fields, lowercase names
+    pub(crate) fn to_json(&self) -> serde_json::Value {
+        let severity = match self.severity {
+            Severity::Error => "error",
+            Severity::Warning => "warning",
+            Severity::Information => "information",
+        };
+        let category = match self.category {
+            Category::Unknown => "unknown",
+            Category::Cardinality => "cardinality",
+            Category::Type => "type",
+            Category::Format => "format",
+            Category::Choice => "choice",
+            Category::Invariant => "invariant",
+        };
+        serde_json::json!({
+            "path": self.path,
+            "severity": severity,
+            "category": category,
+            "message": self.message,
+        })
+    }
 }
 
 fn issue(path: String, category: Category, message: String) -> Issue {
@@ -237,7 +262,15 @@ fn walk_value(
     match value.as_array() {
         Some(items) => {
             for (i, item) in items.iter().enumerate() {
-                walk_single(ty, rel, type_name, item, &format!("{path}[{i}]"), ctx, issues);
+                walk_single(
+                    ty,
+                    rel,
+                    type_name,
+                    item,
+                    &format!("{path}[{i}]"),
+                    ctx,
+                    issues,
+                );
             }
         }
         None => walk_single(ty, rel, type_name, value, path, ctx, issues),
@@ -541,8 +574,7 @@ mod tests {
 
     #[test]
     fn required_is_scoped_to_present_parents() {
-        let missing =
-            errors(r#"{"resourceType":"Patient","communication":[{"preferred":true}]}"#);
+        let missing = errors(r#"{"resourceType":"Patient","communication":[{"preferred":true}]}"#);
         assert_eq!(paths(&missing), ["Patient.communication[0].language"]);
         assert_eq!(errors(r#"{"resourceType":"Patient"}"#), vec![]);
     }
@@ -676,7 +708,10 @@ mod tests {
     fn invariant_severities_map_through() {
         // dom-6: a resource should have narrative - advisory, not an error
         let all = validate(r#"{"resourceType":"Patient"}"#).unwrap();
-        let dom6 = all.iter().find(|i| i.message.starts_with("dom-6:")).unwrap();
+        let dom6 = all
+            .iter()
+            .find(|i| i.message.starts_with("dom-6:"))
+            .unwrap();
         assert_eq!(dom6.severity, Severity::Warning);
         assert_eq!(dom6.category, Category::Invariant);
         assert_eq!(dom6.path, "Patient");
