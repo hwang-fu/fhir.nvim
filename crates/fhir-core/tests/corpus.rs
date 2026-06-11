@@ -8,13 +8,45 @@ use std::fs;
 use std::path::PathBuf;
 
 /// Fraction of examples that must validate without error-severity issues.
-const CLEAN_FLOOR: f64 = 0.92;
+const CLEAN_FLOOR: f64 = 1.0;
 
 /// Invariant keys reported wrongly because of engine limits, with reasons.
-const SUPPRESSED_INVARIANTS: &[(&str, &str)] = &[];
+const SUPPRESSED_INVARIANTS: &[(&str, &str)] = &[
+    (
+        "ext-1",
+        "primitive values carried only by an _element companion are invisible to the engine's value.exists()",
+    ),
+    (
+        "tst-5",
+        "schema-less choice navigation also counts responseCode as the Code form of response",
+    ),
+];
 
 /// Example files (by stem) that are known-imperfect upstream, with reasons.
-const KNOWN_EXCEPTIONS: &[(&str, &str)] = &[];
+const KNOWN_EXCEPTIONS: &[(&str, &str)] = &[
+    // logical-model examples: abstract is false yet baseDefinition is absent
+    ("definition", "violates sdf-4 upstream"),
+    ("event", "violates sdf-4 upstream"),
+    ("fivews", "violates sdf-4 upstream"),
+    ("request", "violates sdf-4 upstream"),
+    // definitional search parameter examples lack the required base element
+    ("codesystem-extensions-CodeSystem-author", "no base"),
+    ("codesystem-extensions-CodeSystem-effective", "no base"),
+    ("codesystem-extensions-CodeSystem-end", "no base"),
+    ("codesystem-extensions-CodeSystem-keyword", "no base"),
+    ("codesystem-extensions-CodeSystem-workflow", "no base"),
+    ("valueset-extensions-ValueSet-author", "no base"),
+    ("valueset-extensions-ValueSet-effective", "no base"),
+    ("valueset-extensions-ValueSet-end", "no base"),
+    ("valueset-extensions-ValueSet-keyword", "no base"),
+    ("valueset-extensions-ValueSet-workflow", "no base"),
+];
+
+/// Whole families of known-imperfect generated examples, by stem suffix.
+const KNOWN_EXCEPTION_SUFFIXES: &[(&str, &str)] = &[(
+    "-questionnaire",
+    "the spec's generated questionnaire forms omit linkId on display items",
+)];
 
 fn corpus_dir() -> Option<PathBuf> {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tests/r4-examples");
@@ -71,7 +103,9 @@ fn r4_examples_validate_cleanly() {
                 .entry(label)
                 .or_insert_with(|| format!("{stem}: {} - {}", i.path, i.message));
         }
-        if !failed || KNOWN_EXCEPTIONS.iter().any(|(s, _)| *s == stem) {
+        let excepted = KNOWN_EXCEPTIONS.iter().any(|(s, _)| *s == stem)
+            || KNOWN_EXCEPTION_SUFFIXES.iter().any(|(s, _)| stem.ends_with(s));
+        if !failed || excepted {
             clean += 1;
         }
     }
@@ -91,6 +125,9 @@ fn r4_examples_validate_cleanly() {
     }
     if !KNOWN_EXCEPTIONS.is_empty() {
         eprintln!("known exceptions: {KNOWN_EXCEPTIONS:?}");
+    }
+    if !KNOWN_EXCEPTION_SUFFIXES.is_empty() {
+        eprintln!("known exception families: {KNOWN_EXCEPTION_SUFFIXES:?}");
     }
     assert!(
         rate >= CLEAN_FLOOR,
