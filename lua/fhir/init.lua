@@ -13,6 +13,15 @@ function M.setup(opts)
     vim.api.nvim_create_user_command("FhirWorkspaceOutline", function()
       require("fhir.features.outline").run_workspace()
     end, { desc = "Pick a FHIR resource from the whole workspace and jump to it" })
+    vim.api.nvim_create_user_command("FhirWorkspaceValidate", function(cmd)
+      require("fhir.features.validate").run_workspace(cmd.args ~= "" and cmd.args or nil)
+    end, {
+      nargs = "?",
+      complete = function()
+        return { "all" }
+      end,
+      desc = "Validate every FHIR document in the workspace into the quickfix list",
+    })
     vim.api.nvim_create_user_command(
       "FhirFetchEngine",
       function(cmd)
