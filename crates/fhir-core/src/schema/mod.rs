@@ -32,7 +32,15 @@ pub struct TypeDef {
 }
 
 mod generated;
-pub use generated::TYPES;
+pub use generated::{PRIMITIVE_PATTERNS, TYPES};
+
+/// The value format regex a primitive type's definition declares.
+pub fn pattern(name: &str) -> Option<&'static str> {
+    PRIMITIVE_PATTERNS
+        .binary_search_by(|(n, _)| (*n).cmp(name))
+        .ok()
+        .map(|i| PRIMITIVE_PATTERNS[i].1)
+}
 
 pub fn type_def(name: &str) -> Option<&'static TypeDef> {
     TYPES
@@ -92,6 +100,14 @@ mod tests {
         // invariants made it across, with severities
         assert!(obs.constraints.iter().any(|c| c.severity == Severity::Error));
         assert!(type_def("Nope").is_none());
+    }
+
+    #[test]
+    fn primitive_patterns_are_available() {
+        assert!(pattern("date").is_some());
+        assert!(pattern("boolean").is_some());
+        assert!(pattern("HumanName").is_none());
+        assert!(PRIMITIVE_PATTERNS.windows(2).all(|w| w[0].0 < w[1].0));
     }
 
     #[test]
