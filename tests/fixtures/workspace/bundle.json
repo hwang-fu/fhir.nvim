@@ -1,0 +1,21 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:m1",
+      "resource": { "resourceType": "Medication", "id": "m1" }
+    },
+    {
+      "fullUrl": "urn:uuid:r1",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "r1",
+        "status": "active",
+        "intent": "order",
+        "medicationReference": { "reference": "urn:uuid:m1" },
+        "subject": { "reference": "Patient/p1" }
+      }
+    }
+  ]
+}

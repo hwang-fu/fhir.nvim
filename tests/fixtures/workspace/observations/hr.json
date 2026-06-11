@@ -1,0 +1,7 @@
+{
+  "resourceType": "Observation",
+  "id": "o1",
+  "status": "final",
+  "code": { "text": "Heart rate" },
+  "subject": { "reference": "Patient/p1" }
+}
