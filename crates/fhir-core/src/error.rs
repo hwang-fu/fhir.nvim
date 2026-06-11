@@ -5,6 +5,7 @@ pub enum Error {
     Lex(String),
     Parse(String),
     Eval(String),
+    Validate(String),
 }
 
 impl fmt::Display for Error {
@@ -13,6 +14,7 @@ impl fmt::Display for Error {
             Error::Lex(m) => write!(f, "lex error: {m}"),
             Error::Parse(m) => write!(f, "parse error: {m}"),
             Error::Eval(m) => write!(f, "eval error: {m}"),
+            Error::Validate(m) => write!(f, "validate error: {m}"),
         }
     }
 }
