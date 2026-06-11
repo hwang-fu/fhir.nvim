@@ -5,6 +5,36 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [4.0.0] - unreleased
+
+Workspace awareness: the plugin stops ending at the buffer edge.
+
+### Added
+
+- Cross-file navigation: `:FhirGoto` follows references into other files
+  under the workspace root (the enclosing git repository, or the cwd),
+  `:FhirUsages` lists referrers from the whole project, and the global
+  `:FhirWorkspaceOutline` picks from every resource - files need not be
+  open. Ambiguous identities pick the first match and say so.
+- FHIRPath `resolve()` and validation invariants reach workspace targets
+  through the same resolver.
+- `:FhirWorkspaceValidate [all]` validates every document under the root
+  into the quickfix list at exact element positions - error findings by
+  default, `all` includes advisories; open buffers refresh their
+  diagnostics; the summary reports every count.
+- `:FhirFix` repairs the structural finding under the cursor: remove an
+  unknown element, insert a missing required element, rewrite a bare
+  choice name to its typed form, fix array shape, drop an empty array.
+  Single undo step per repair; the buffer re-validates immediately.
+- `workspace` configuration (`ignore`, `max_files` - discovery is lazy,
+  bounded, and reports clipping) and an opt-in `keymaps.fix` mapping.
+- `:checkhealth fhir` reports the workspace root and candidate count.
+
+### Changed
+
+- The default engine release pin (`native.tag`) is `v4.0.0`. The engine
+  itself is unchanged since v3.0.0 - this release is pure Lua.
+
 ## [3.0.0] - 2026-06-11
 
 Validation: open a FHIR document and see what is wrong with it, inline.
