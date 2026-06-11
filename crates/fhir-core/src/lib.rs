@@ -24,6 +24,12 @@ pub fn evaluate_json(resource_json: &str, expression: &str) -> Result<String, Er
     Engine::new().evaluate_json(resource_json, expression)
 }
 
+/// Like [`validate`], but rendered as a compact JSON array string - the form
+/// foreign callers (e.g. the editor binding) consume.
+pub fn validate_json(resource_json: &str) -> Result<String, Error> {
+    Engine::new().validate_json(resource_json)
+}
+
 /// Resolves a FHIR reference (e.g. "Patient/p1") to a resource. How references
 /// are looked up is the caller's concern; the engine only asks.
 pub trait Resolve {
@@ -67,6 +73,13 @@ impl Engine {
     /// do so through the engine's resolver.
     pub fn validate(&self, resource_json: &str) -> Result<Vec<Issue>, Error> {
         validate::run(resource_json, self.resolver.as_deref())
+    }
+
+    /// Like [`Engine::validate`], rendered as a compact JSON array string.
+    pub fn validate_json(&self, resource_json: &str) -> Result<String, Error> {
+        let issues = self.validate(resource_json)?;
+        let rendered: Vec<serde_json::Value> = issues.iter().map(Issue::to_json).collect();
+        serde_json::to_string(&rendered).map_err(|e| Error::Validate(format!("render: {e}")))
     }
 }
 
@@ -391,6 +404,26 @@ mod tests {
         assert_eq!(evaluate_json(OBS, "value.unit").unwrap(), r#"["lbs"]"#);
         assert!(evaluate_json(PATIENT, "1 +").is_err());
         assert!(evaluate_json("not json", "name").is_err());
+    }
+
+    #[test]
+    fn validate_json_renders_an_issue_array() {
+        let out = validate_json(r#"{"resourceType":"Patient","favouriteColor":"blue"}"#).unwrap();
+        let issues: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let issues = issues.as_array().unwrap();
+        // instance invariants emit first, so look the structural finding up
+        let unknown = issues.iter().find(|i| i["category"] == "unknown").unwrap();
+        assert_eq!(unknown["path"], "Patient.favouriteColor");
+        assert_eq!(unknown["severity"], "error");
+        assert!(
+            unknown["message"]
+                .as_str()
+                .unwrap()
+                .contains("favouriteColor")
+        );
+        // the array also carries the advisory findings (dom-6 here)
+        assert!(out.contains(r#""severity":"warning""#));
+        assert!(validate_json("{").is_err());
     }
 
     #[test]
