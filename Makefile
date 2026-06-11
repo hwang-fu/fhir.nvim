@@ -47,13 +47,14 @@ schema:
 	curl -fsSL -o $(SCHEMA_CACHE)/profiles-resources.json $(SCHEMA_BASE)/profiles-resources.json
 	$(CARGO) run -p fhir-schema-gen -- $(SCHEMA_CACHE)/profiles-types.json $(SCHEMA_CACHE)/profiles-resources.json $(SCHEMA_OUT) "$(SCHEMA_BASE) definitions, fetched $$(date -u +%Y-%m-%d)"
 
-corpus:
-	test -f $(CORPUS_DIR)/.complete || ( \
-	  mkdir -p $(CORPUS_DIR) && \
-	  curl -fsSL -o $(CORPUS_DIR)/examples.zip $(CORPUS_URL) && \
-	  unzip -oq $(CORPUS_DIR)/examples.zip -d $(CORPUS_DIR) && \
-	  rm $(CORPUS_DIR)/examples.zip && \
-	  touch $(CORPUS_DIR)/.complete )
+$(CORPUS_DIR)/.complete:
+	mkdir -p $(CORPUS_DIR)
+	curl -fsSL -o $(CORPUS_DIR)/examples.zip $(CORPUS_URL)
+	unzip -oq $(CORPUS_DIR)/examples.zip -d $(CORPUS_DIR)
+	rm $(CORPUS_DIR)/examples.zip
+	touch $@
+
+corpus: $(CORPUS_DIR)/.complete
 
 clean:
 	rm -rf $(SCRATCH)
