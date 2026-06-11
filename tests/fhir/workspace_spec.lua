@@ -48,6 +48,48 @@ describe("workspace", function()
     assert.is_not_nil(notified:match("max_files"))
   end)
 
+  it("indexes identities across files", function()
+    local idx = workspace.index(FIX)
+    assert.are.same({ FIX .. "/patients/alice.json" }, idx.by_identity["Patient/p1"])
+    assert.are.same({ FIX .. "/bundle.json" }, idx.by_identity["urn:uuid:m1"])
+    assert.are.same({ FIX .. "/bundle.json" }, idx.by_identity["Medication/m1"])
+    assert.is_not_nil(idx.by_identity["Observation/o1"])
+  end)
+
+  it("collects outgoing references per file", function()
+    local idx = workspace.index(FIX)
+    local hr = idx.references[FIX .. "/observations/hr.json"]
+    assert.are.same({ "Patient/p1" }, hr)
+    local bundle = idx.references[FIX .. "/bundle.json"]
+    table.sort(bundle)
+    assert.are.same({ "Patient/p1", "urn:uuid:m1" }, bundle)
+  end)
+
+  it("skips non-resources and unparseable files quietly", function()
+    local idx = workspace.index(FIX)
+    for _, files in pairs(idx.by_identity) do
+      for _, f in ipairs(files) do
+        assert.is_nil(f:match("notes%.json"))
+        assert.is_nil(f:match("broken%.json"))
+      end
+    end
+    assert.are.equal(2, idx.skipped) -- counted, never silent
+  end)
+
+  it("re-decodes only files whose mtime changed", function()
+    local tmp = vim.fn.tempname()
+    vim.fn.mkdir(tmp, "p")
+    local file = tmp .. "/x.json"
+    vim.fn.writefile({ '{"resourceType":"Patient","id":"a"}' }, file)
+    assert.is_not_nil(workspace.index(tmp).by_identity["Patient/a"])
+    vim.fn.writefile({ '{"resourceType":"Patient","id":"b"}' }, file)
+    local stat = vim.uv.fs_stat(file)
+    vim.uv.fs_utime(file, stat.mtime.sec + 5, stat.mtime.sec + 5)
+    local idx = workspace.index(tmp)
+    assert.is_not_nil(idx.by_identity["Patient/b"])
+    assert.is_nil(idx.by_identity["Patient/a"])
+  end)
+
   it("replaces the ignore list wholesale when configured", function()
     require("fhir.config").setup({ workspace = { ignore = { "patients" } } })
     local ws = require("fhir.config").get().workspace
