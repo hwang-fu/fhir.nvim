@@ -3,7 +3,9 @@ local native = require("fhir.native")
 local parse = require("fhir.parse")
 local pathmap = require("fhir.pathmap")
 local resolver = require("fhir.resolver")
+local resolver_ws = require("fhir.resolver.workspace")
 local ui = require("fhir.ui")
+local workspace = require("fhir.workspace")
 
 local M = {}
 
@@ -61,6 +63,75 @@ end
 -- Drop a buffer's findings (the current buffer when unspecified).
 function M.clear(buf)
   vim.diagnostic.reset(ns, buf or vim.api.nvim_get_current_buf())
+end
+
+local qf_types = { error = "E", warning = "W", information = "I" }
+
+-- Validate every workspace document (raw disk text, no resolver - the
+-- lenient verdict rules cover unresolvable references) and collect the
+-- findings into the quickfix list. `scope == "all"` includes advisory
+-- findings; the default keeps errors only. The summary counts everything
+-- either way.
+function M.run_workspace(scope)
+  if not native.available() then
+    ui.notify("FHIRPath engine not available (run `make build`)", vim.log.levels.ERROR)
+    return
+  end
+  local file = vim.api.nvim_buf_get_name(0)
+  local root = workspace.root(file ~= "" and file or vim.uv.cwd())
+  local files = workspace.files(root)
+  ui.notify(("validating %d files..."):format(#files))
+
+  local counts = { error = 0, warning = 0, information = 0 }
+  local skipped = 0
+  local entries = {}
+  for _, f in ipairs(files) do
+    local ok, lines = pcall(vim.fn.readfile, f)
+    local result, err
+    if ok then
+      result, err = native.validate(table.concat(lines, "\n"))
+    end
+    if not ok or err then
+      skipped = skipped + 1 -- unreadable, unparseable, or not a resource
+    else
+      local kept = {}
+      for _, issue in ipairs(vim.json.decode(result)) do
+        counts[issue.severity] = (counts[issue.severity] or 0) + 1
+        if scope == "all" or issue.severity == "error" then
+          kept[#kept + 1] = issue
+        end
+      end
+      if #kept > 0 then
+        -- only files with findings pay for a buffer: pathmap places each
+        -- entry at its exact element
+        local buf = resolver_ws.open_file(f)
+        local doc = parse.root(buf)
+        for _, issue in ipairs(kept) do
+          local r = doc and pathmap.range(doc, buf, issue.path) or { 0, 0, 0, 0 }
+          entries[#entries + 1] = {
+            filename = f,
+            lnum = r[1] + 1,
+            col = r[2] + 1,
+            type = qf_types[issue.severity] or "E",
+            text = ("[%s] %s"):format(issue.severity, issue.message),
+          }
+        end
+      end
+    end
+  end
+
+  vim.fn.setqflist({}, " ", { title = "FHIR workspace validation", items = entries })
+  local summary = ("%d files validated, %d skipped: %d errors, %d warnings, %d informational"):format(
+    #files - skipped,
+    skipped,
+    counts.error,
+    counts.warning,
+    counts.information
+  )
+  if #entries > 0 then
+    summary = summary .. " - :copen to browse"
+  end
+  ui.notify(summary, counts.error > 0 and vim.log.levels.WARN or vim.log.levels.INFO)
 end
 
 -- The write hook: quietly does nothing when the engine is absent.
