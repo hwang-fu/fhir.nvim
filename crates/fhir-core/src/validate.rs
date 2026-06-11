@@ -4,6 +4,7 @@
 use crate::error::Error;
 use crate::schema::{self, Element, Severity, TypeDef};
 use serde_json::{Map, Value};
+use std::collections::{BTreeMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Issue {
@@ -65,6 +66,8 @@ fn walk_object(
     path: &str,
     issues: &mut Vec<Issue>,
 ) {
+    let mut present: HashSet<&'static str> = HashSet::new();
+    let mut variants: BTreeMap<&'static str, Vec<&str>> = BTreeMap::new();
     for (key, value) in obj {
         if prefix.is_empty() && key == "resourceType" {
             continue;
@@ -75,10 +78,27 @@ fn walk_object(
         let rel = join(prefix, key);
         let child_path = format!("{path}.{key}");
         if let Some(el) = ty.element(&rel) {
+            present.insert(el.path);
+            if el.choice {
+                // the bare name never appears in json; the type is in the key
+                issues.push(issue(
+                    child_path,
+                    Category::Choice,
+                    format!(
+                        "{key:?} takes a typed form (e.g. \"{key}{}\")",
+                        capitalized(el.types.first().unwrap_or(&""))
+                    ),
+                ));
+                continue;
+            }
+            check_shape(el, value, &child_path, issues);
             if let Some(t) = el.types.first() {
                 walk_value(ty, &rel, t, value, &child_path, issues);
             }
         } else if let Some((el, variant)) = resolve_choice(ty, prefix, key) {
+            present.insert(el.path);
+            variants.entry(el.path).or_default().push(key);
+            check_shape(el, value, &child_path, issues);
             walk_value(ty, el.path, variant, value, &child_path, issues);
         } else {
             issues.push(issue(
@@ -86,6 +106,58 @@ fn walk_object(
                 Category::Unknown,
                 format!("{key:?} is not an element of {}", scope(ty, prefix)),
             ));
+        }
+    }
+    for (el_path, keys) in &variants {
+        if keys.len() > 1 {
+            let seg = last_segment(el_path);
+            issues.push(issue(
+                format!("{path}.{seg}"),
+                Category::Choice,
+                format!(
+                    "only one form of {seg:?} is allowed (found {})",
+                    keys.join(", ")
+                ),
+            ));
+        }
+    }
+    for child in ty.children_of(prefix) {
+        if child.min > 0 && !present.contains(child.path) {
+            let seg = last_segment(child.path);
+            issues.push(issue(
+                format!("{path}.{seg}"),
+                Category::Cardinality,
+                format!("required element {seg:?} is missing"),
+            ));
+        }
+    }
+}
+
+fn check_shape(el: &Element, value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    match value.as_array() {
+        Some(items) => {
+            if !el.max_many {
+                issues.push(issue(
+                    path.to_string(),
+                    Category::Cardinality,
+                    "did not expect an array (the element does not repeat)".into(),
+                ));
+            } else if items.is_empty() {
+                issues.push(issue(
+                    path.to_string(),
+                    Category::Cardinality,
+                    "arrays must not be empty".into(),
+                ));
+            }
+        }
+        None => {
+            if el.max_many {
+                issues.push(issue(
+                    path.to_string(),
+                    Category::Cardinality,
+                    "expected an array (the element repeats)".into(),
+                ));
+            }
         }
     }
 }
@@ -167,7 +239,7 @@ fn resolve_choice(
         if !el.choice {
             continue;
         }
-        let base = el.path.rsplit('.').next().unwrap_or(el.path);
+        let base = last_segment(el.path);
         let Some(suffix) = key.strip_prefix(base) else {
             continue;
         };
@@ -190,6 +262,18 @@ fn variant_matches(suffix: &str, type_name: &str) -> bool {
     match cs.next() {
         Some(c) => format!("{}{}", c.to_ascii_lowercase(), cs.as_str()) == type_name,
         None => false,
+    }
+}
+
+fn last_segment(path: &str) -> &str {
+    path.rsplit('.').next().unwrap_or(path)
+}
+
+fn capitalized(name: &str) -> String {
+    let mut cs = name.chars();
+    match cs.next() {
+        Some(c) => format!("{}{}", c.to_ascii_uppercase(), cs.as_str()),
+        None => String::new(),
     }
 }
 
@@ -286,10 +370,59 @@ mod tests {
     }
 
     #[test]
+    fn required_elements_are_enforced() {
+        let issues =
+            validate(r#"{"resourceType":"Observation","valueQuantity":{"value":1}}"#).unwrap();
+        assert_eq!(paths(&issues), ["Observation.code", "Observation.status"]);
+        assert!(issues.iter().all(|i| i.category == Category::Cardinality));
+    }
+
+    #[test]
+    fn required_is_scoped_to_present_parents() {
+        let missing =
+            validate(r#"{"resourceType":"Patient","communication":[{"preferred":true}]}"#).unwrap();
+        assert_eq!(paths(&missing), ["Patient.communication[0].language"]);
+        assert_eq!(validate(r#"{"resourceType":"Patient"}"#).unwrap(), vec![]);
+    }
+
+    #[test]
+    fn array_shape_must_match_cardinality() {
+        let issues = validate(
+            r#"{"resourceType":"Patient","name":{"family":"X"},
+                "gender":["male","female"],"photo":[]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            paths(&issues),
+            ["Patient.gender", "Patient.name", "Patient.photo"]
+        );
+        assert!(issues.iter().all(|i| i.category == Category::Cardinality));
+    }
+
+    #[test]
+    fn choice_variants_are_mutually_exclusive() {
+        let issues = validate(
+            r#"{"resourceType":"Observation","status":"final","code":{"text":"BP"},
+                "valueQuantity":{"value":120},"valueString":"high"}"#,
+        )
+        .unwrap();
+        assert_eq!(paths(&issues), ["Observation.value"]);
+        assert_eq!(issues[0].category, Category::Choice);
+    }
+
+    #[test]
+    fn bare_choice_names_are_rejected() {
+        let issues = validate(r#"{"resourceType":"Patient","deceased":true}"#).unwrap();
+        assert_eq!(paths(&issues), ["Patient.deceased"]);
+        assert_eq!(issues[0].category, Category::Choice);
+    }
+
+    #[test]
     fn content_references_recurse() {
         let issues = validate(
             r#"{"resourceType":"Questionnaire","status":"draft",
-                "item":[{"linkId":"1","item":[{"linkId":"1.1","blorb":true}]}]}"#,
+                "item":[{"linkId":"1","type":"group",
+                         "item":[{"linkId":"1.1","type":"string","blorb":true}]}]}"#,
         )
         .unwrap();
         assert_eq!(paths(&issues), ["Questionnaire.item[0].item[0].blorb"]);
