@@ -11,6 +11,9 @@ local M = {}
 
 local ns = vim.api.nvim_create_namespace("fhir.validate")
 
+-- The diagnostics namespace, for siblings that read our findings.
+M.namespace = ns
+
 local severities = {
   error = vim.diagnostic.severity.ERROR,
   warning = vim.diagnostic.severity.WARN,
@@ -59,6 +62,7 @@ local function publish(buf, quiet)
       severity = severities[issue.severity] or vim.diagnostic.severity.ERROR,
       message = issue.message,
       source = "fhir",
+      user_data = issue, -- the raw finding, for consumers like quick fixes
     }
   end
   vim.diagnostic.set(ns, buf, diags)

@@ -35,14 +35,14 @@ local function item(node, i)
   end
 end
 
--- Maps an element path with indices ("Patient.name[0].given[2]") onto the
--- buffer: the element's key when the path resolves (a tight underline), the
--- deepest existing ancestor when it does not (e.g. a missing required
--- element lands on its parent), the resource's first line as a last resort.
--- `root` is the resource's own object node; the leading type segment names
--- it and is skipped. Returns { start_row, start_col, end_row, end_col }.
-function M.range(root, bufnr, path)
+-- Resolves an element path with indices ("Patient.name[0].given[2]") to
+-- its treesitter nodes: the value node, its key node (nil for array
+-- elements and the root), and whether every segment resolved. On a miss
+-- the deepest resolved node is returned. `root` is the resource's own
+-- object node; the leading type segment names it and is skipped.
+function M.node(root, bufnr, path)
   local node, key = root, nil
+  local exact = true
   local first = true
   for seg in path:gmatch("[^%.]+") do
     if first then
@@ -51,18 +51,29 @@ function M.range(root, bufnr, path)
       local name, idx = parse_segment(seg)
       local value, k = field(node, name, bufnr)
       if not value then
+        exact = false
         break
       end
       node, key = value, k
       if idx then
         local element = item(node, idx)
         if not element then
+          exact = false
           break
         end
         node, key = element, nil -- an array element has no key of its own
       end
     end
   end
+  return node, key, exact
+end
+
+-- The buffer range for a path: the element's key when it resolves (a
+-- tight underline), the deepest existing ancestor when it does not (e.g.
+-- a missing required element lands on its parent), the resource's first
+-- line as a last resort. Returns { start_row, start_col, end_row, end_col }.
+function M.range(root, bufnr, path)
+  local node, key = M.node(root, bufnr, path)
   local sr, sc, er, ec = (key or node):range()
   return { sr, sc, er, ec }
 end
