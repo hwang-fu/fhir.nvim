@@ -69,6 +69,70 @@ local function identities_of(doc)
   return ids
 end
 
+-- The buffer labeler's precedence over a plain decoded table:
+-- code.text, first coding display, name text / "<given> <family>".
+local function human_of(doc)
+  local code = doc.code
+  if type(code) == "table" then
+    if type(code.text) == "string" then
+      return code.text
+    end
+    local coding = type(code.coding) == "table" and code.coding[1]
+    if type(coding) == "table" and type(coding.display) == "string" then
+      return coding.display
+    end
+  end
+  local name = type(doc.name) == "table" and doc.name[1]
+  if type(name) == "table" then
+    if type(name.text) == "string" then
+      return name.text
+    end
+    local given = type(name.given) == "table" and name.given[1]
+    local family = name.family
+    if type(given) == "string" and type(family) == "string" then
+      return given .. " " .. family
+    end
+    return (type(given) == "string" and given) or (type(family) == "string" and family) or nil
+  end
+  return nil
+end
+
+local function label_of(doc, identity)
+  local human = human_of(doc)
+  if human then
+    return string.format("[%s] %s (%s)", doc.resourceType, human, doc.id or "?")
+  end
+  return identity
+end
+
+-- Outline rows: one per resource (the root, or each bundle entry), with a
+-- jumpable identity and a human label.
+local function resources_of(doc)
+  local list = {}
+  if doc.resourceType ~= "Bundle" then
+    if type(doc.id) == "string" then
+      local identity = doc.resourceType .. "/" .. doc.id
+      list[#list + 1] = { identity = identity, label = label_of(doc, identity) }
+    end
+    return list
+  end
+  if type(doc.entry) == "table" then
+    for _, e in ipairs(doc.entry) do
+      local r = type(e) == "table" and e.resource
+      local identity
+      if type(r) == "table" and type(r.resourceType) == "string" and type(r.id) == "string" then
+        identity = r.resourceType .. "/" .. r.id
+      elseif type(e) == "table" and type(e.fullUrl) == "string" then
+        identity = e.fullUrl
+      end
+      if identity then
+        list[#list + 1] = { identity = identity, label = label_of(r or {}, identity) }
+      end
+    end
+  end
+  return list
+end
+
 -- Every reference string in the document, except contained (#) ones -
 -- those can never point outside their own file.
 local function references_of(value, out)
@@ -97,14 +161,18 @@ local function record(path)
   if not ok or type(doc) ~= "table" or type(doc.resourceType) ~= "string" then
     return nil
   end
-  return { identities = identities_of(doc), references = references_of(doc, {}) }
+  return {
+    identities = identities_of(doc),
+    references = references_of(doc, {}),
+    resources = resources_of(doc),
+  }
 end
 
 -- The identity/reference index for a root. Candidates are listed fresh
 -- each call; per-file records are reused unless the file's mtime moved.
 function M.index(root)
   local files, clipped = M.files(root)
-  local by_identity, references = {}, {}
+  local by_identity, references, resources = {}, {}, {}
   local skipped = 0
   for _, f in ipairs(files) do
     local stat = vim.uv.fs_stat(f)
@@ -123,6 +191,9 @@ function M.index(root)
       if #cached.data.references > 0 then
         references[f] = cached.data.references
       end
+      for _, r in ipairs(cached.data.resources) do
+        resources[#resources + 1] = { identity = r.identity, label = r.label, file = f }
+      end
     else
       skipped = skipped + 1
     end
@@ -133,6 +204,7 @@ function M.index(root)
   return {
     by_identity = by_identity,
     references = references,
+    resources = resources,
     skipped = skipped,
     clipped = clipped,
   }
