@@ -9,6 +9,13 @@ local defaults = {
   -- on_save re-validates attached buffers after every write (when the
   -- engine is present); :FhirValidate always works manually.
   validate = { on_save = true },
+  -- Cross-file features look for json under the buffer's git root (cwd
+  -- when there is none), skipping `ignore` directories; `max_files`
+  -- bounds the scan and clipping is reported.
+  workspace = {
+    ignore = { ".git", "node_modules", "target", ".tests" },
+    max_files = 2000,
+  },
 }
 
 -- Active config; initialized from defaults so get() works before setup() is called.
@@ -31,6 +38,14 @@ local function validate(opts)
   then
     error("fhir: validate.on_save must be a boolean")
   end
+  if opts.workspace ~= nil then
+    if opts.workspace.ignore ~= nil and type(opts.workspace.ignore) ~= "table" then
+      error("fhir: workspace.ignore must be a list of directory names")
+    end
+    if opts.workspace.max_files ~= nil and type(opts.workspace.max_files) ~= "number" then
+      error("fhir: workspace.max_files must be a number")
+    end
+  end
 end
 
 function M.setup(opts)
@@ -38,6 +53,11 @@ function M.setup(opts)
   validate(opts)
   -- "force": user values win at the leaf, untouched defaults survive.
   current = vim.tbl_deep_extend("force", defaults, opts)
+  -- list options replace wholesale: index-wise merging would leave default
+  -- tail entries behind a shorter user list
+  if opts.workspace ~= nil and opts.workspace.ignore ~= nil then
+    current.workspace.ignore = opts.workspace.ignore
+  end
 end
 
 function M.get()

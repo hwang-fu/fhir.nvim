@@ -31,6 +31,9 @@ pub struct TypeDef {
     pub constraints: &'static [Constraint],
 }
 
+// generated.rs must stay byte-identical to the generator's output -
+// reformatting it would break the regeneration diff contract
+#[rustfmt::skip]
 mod generated;
 pub use generated::{PRIMITIVE_PATTERNS, TYPES};
 
