@@ -72,6 +72,15 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Cache the example corpus
+        uses: actions/cache@v5
+        with:
+          path: .tests/r4-examples
+          key: r4-examples-json-v1
+
+      - name: Fetch the example corpus
+        run: make corpus
+
       - name: cargo build (native module)
         run: cargo build -p fhir-core-lua
 
