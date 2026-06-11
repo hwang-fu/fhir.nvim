@@ -127,6 +127,16 @@ preserved, end-of-month clamped); `today()`/`now()`; `extension(url)`;
 Not covered yet: unit conversion (UCUM), `%variables`, type reflection,
 strict choice-element typing rules, and terminology functions.
 
+The engine also **validates** resources against the R4 definitions:
+structure (unknown elements, cardinality, value types, primitive formats,
+choice elements) and constraint invariants evaluated as FHIRPath, over
+schema tables generated from the official definitions. Measured against
+the **official R4 example corpus** (2,911 documents, `make corpus`):
+**100%** validate without error-severity findings - after documenting 203
+examples that are imperfect upstream and two invariant keys the engine
+cannot yet evaluate faithfully; every exclusion is listed in the harness
+output, and the rate is a ratcheting floor in CI.
+
 ## Roadmap
 
 v1 is navigation, in pure Lua. In progress or planned:
