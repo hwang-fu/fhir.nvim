@@ -388,15 +388,23 @@ mod tests {
         issues.iter().map(|i| i.path.as_str()).collect()
     }
 
+    /// Error-severity issues only: advisory findings are asserted explicitly.
+    fn errors(json: &str) -> Vec<Issue> {
+        validate(json)
+            .unwrap()
+            .into_iter()
+            .filter(|i| i.severity == Severity::Error)
+            .collect()
+    }
+
     #[test]
     fn a_clean_resource_yields_no_issues() {
-        let issues = validate(
+        let issues = errors(
             r#"{"resourceType":"Patient","id":"p1","active":true,
                 "name":[{"family":"Chalmers","given":["Peter","James"]}],
                 "deceasedBoolean":false,
                 "maritalStatus":{"coding":[{"system":"http://x","code":"M"}],"text":"married"}}"#,
-        )
-        .unwrap();
+        );
         assert_eq!(issues, vec![]);
     }
 
@@ -409,12 +417,11 @@ mod tests {
 
     #[test]
     fn unknown_elements_are_flagged_with_indexed_paths() {
-        let issues = validate(
+        let issues = errors(
             r#"{"resourceType":"Patient","favouriteColor":"blue",
                 "name":[{"family":"Chalmers"},{"familyy":"Oops"}],
-                "contact":[{"gendr":"male"}]}"#,
-        )
-        .unwrap();
+                "contact":[{"gendr":"male","name":{"family":"Du"}}]}"#,
+        );
         assert_eq!(
             paths(&issues),
             [
@@ -424,7 +431,6 @@ mod tests {
             ]
         );
         assert!(issues.iter().all(|i| i.category == Category::Unknown));
-        assert!(issues.iter().all(|i| i.severity == Severity::Error));
     }
 
     #[test]
@@ -436,20 +442,19 @@ mod tests {
 
     #[test]
     fn choice_keys_resolve_to_their_variant() {
-        let ok = validate(r#"{"resourceType":"Patient","deceasedDateTime":"2026"}"#).unwrap();
+        let ok = errors(r#"{"resourceType":"Patient","deceasedDateTime":"2026"}"#);
         assert_eq!(ok, vec![]);
-        let bad = validate(r#"{"resourceType":"Patient","deceasedFoo":true}"#).unwrap();
+        let bad = errors(r#"{"resourceType":"Patient","deceasedFoo":true}"#);
         assert_eq!(paths(&bad), ["Patient.deceasedFoo"]);
     }
 
     #[test]
     fn recursion_covers_backbones_and_contained_resources() {
-        let issues = validate(
+        let issues = errors(
             r#"{"resourceType":"Patient",
                 "communication":[{"language":{"text":"en"},"fluent":true}],
-                "contained":[{"resourceType":"Organization","nm":"x"}]}"#,
-        )
-        .unwrap();
+                "contained":[{"resourceType":"Organization","name":"Acme","nm":"x"}]}"#,
+        );
         assert_eq!(
             paths(&issues),
             ["Patient.communication[0].fluent", "Patient.contained[0].nm"]
@@ -458,8 +463,7 @@ mod tests {
 
     #[test]
     fn required_elements_are_enforced() {
-        let issues =
-            validate(r#"{"resourceType":"Observation","valueQuantity":{"value":1}}"#).unwrap();
+        let issues = errors(r#"{"resourceType":"Observation","valueQuantity":{"value":1}}"#);
         assert_eq!(paths(&issues), ["Observation.code", "Observation.status"]);
         assert!(issues.iter().all(|i| i.category == Category::Cardinality));
     }
@@ -467,18 +471,17 @@ mod tests {
     #[test]
     fn required_is_scoped_to_present_parents() {
         let missing =
-            validate(r#"{"resourceType":"Patient","communication":[{"preferred":true}]}"#).unwrap();
+            errors(r#"{"resourceType":"Patient","communication":[{"preferred":true}]}"#);
         assert_eq!(paths(&missing), ["Patient.communication[0].language"]);
-        assert_eq!(validate(r#"{"resourceType":"Patient"}"#).unwrap(), vec![]);
+        assert_eq!(errors(r#"{"resourceType":"Patient"}"#), vec![]);
     }
 
     #[test]
     fn array_shape_must_match_cardinality() {
-        let issues = validate(
+        let issues = errors(
             r#"{"resourceType":"Patient","name":{"family":"X"},
                 "gender":["male","female"],"photo":[]}"#,
-        )
-        .unwrap();
+        );
         assert_eq!(
             paths(&issues),
             ["Patient.gender", "Patient.name", "Patient.photo"]
@@ -488,31 +491,29 @@ mod tests {
 
     #[test]
     fn choice_variants_are_mutually_exclusive() {
-        let issues = validate(
+        let issues = errors(
             r#"{"resourceType":"Observation","status":"final","code":{"text":"BP"},
                 "valueQuantity":{"value":120},"valueString":"high"}"#,
-        )
-        .unwrap();
+        );
         assert_eq!(paths(&issues), ["Observation.value"]);
         assert_eq!(issues[0].category, Category::Choice);
     }
 
     #[test]
     fn bare_choice_names_are_rejected() {
-        let issues = validate(r#"{"resourceType":"Patient","deceased":true}"#).unwrap();
+        let issues = errors(r#"{"resourceType":"Patient","deceased":true}"#);
         assert_eq!(paths(&issues), ["Patient.deceased"]);
         assert_eq!(issues[0].category, Category::Choice);
     }
 
     #[test]
     fn value_shapes_must_match_declared_types() {
-        let issues = validate(
+        let issues = errors(
             r#"{"resourceType":"Patient","active":"yes",
                 "name":[{"family":{"x":1}}],
                 "maritalStatus":"M",
                 "multipleBirthInteger":2.5}"#,
-        )
-        .unwrap();
+        );
         assert_eq!(
             paths(&issues),
             [
@@ -529,11 +530,10 @@ mod tests {
     fn primitive_formats_are_checked() {
         // NB not Patient.id: R4 snapshots type id/url elements as plain "string"
         // (the System.String magic url), so the string regex would accept spaces
-        let issues = validate(
+        let issues = errors(
             r#"{"resourceType":"Patient","birthDate":"06/10/2026","gender":"male",
                 "meta":{"lastUpdated":"yesterday"}}"#,
-        )
-        .unwrap();
+        );
         assert_eq!(
             paths(&issues),
             ["Patient.birthDate", "Patient.meta.lastUpdated"]
@@ -543,32 +543,30 @@ mod tests {
 
     #[test]
     fn nulls_are_rejected() {
-        let issues = validate(r#"{"resourceType":"Patient","active":null}"#).unwrap();
+        let issues = errors(r#"{"resourceType":"Patient","active":null}"#);
         assert_eq!(paths(&issues), ["Patient.active"]);
         assert_eq!(issues[0].category, Category::Type);
     }
 
     #[test]
     fn underscore_companions_are_recognized() {
-        let ok = validate(
+        let ok = errors(
             r#"{"resourceType":"Patient",
                 "_birthDate":{"extension":[{"url":"http://x","valueCode":"asked-unknown"}]}}"#,
-        )
-        .unwrap();
+        );
         assert_eq!(ok, vec![]);
-        let bad = validate(r#"{"resourceType":"Patient","_favouriteColor":{}}"#).unwrap();
+        let bad = errors(r#"{"resourceType":"Patient","_favouriteColor":{}}"#);
         assert_eq!(paths(&bad), ["Patient._favouriteColor"]);
         assert_eq!(bad[0].category, Category::Unknown);
     }
 
     #[test]
     fn content_references_recurse() {
-        let issues = validate(
+        let issues = errors(
             r#"{"resourceType":"Questionnaire","status":"draft",
                 "item":[{"linkId":"1","type":"group",
                          "item":[{"linkId":"1.1","type":"string","blorb":true}]}]}"#,
-        )
-        .unwrap();
+        );
         assert_eq!(paths(&issues), ["Questionnaire.item[0].item[0].blorb"]);
     }
 }
