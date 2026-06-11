@@ -43,6 +43,9 @@ function M.attach(bufnr)
       v.run()
     end
   end, { bang = true, desc = "Validate the buffer's FHIR document (! clears the findings)" })
+  vim.api.nvim_buf_create_user_command(bufnr, "FhirFix", function()
+    require("fhir.features.fix").run()
+  end, { desc = "Fix the FHIR finding under the cursor" })
   vim.api.nvim_buf_create_user_command(bufnr, "FhirDisable", function()
     M.detach(bufnr)
   end, { desc = "Disable fhir.nvim for this buffer" })
@@ -85,6 +88,12 @@ function M.attach(bufnr)
       vim.diagnostic.open_float()
     end, { buffer = bufnr, desc = "fhir: finding details" })
   end
+  local fix_key = config.get().keymaps.fix
+  if fix_key then
+    vim.keymap.set("n", fix_key, function()
+      require("fhir.features.fix").run()
+    end, { buffer = bufnr, desc = "fhir: fix the finding under the cursor" })
+  end
 end
 
 -- Tear down: remove commands/keymaps, clear state, drop the cached index.
@@ -95,6 +104,7 @@ function M.detach(bufnr)
   pcall(vim.api.nvim_buf_del_user_command, bufnr, "FhirOutline")
   pcall(vim.api.nvim_buf_del_user_command, bufnr, "FhirEval")
   pcall(vim.api.nvim_buf_del_user_command, bufnr, "FhirValidate")
+  pcall(vim.api.nvim_buf_del_user_command, bufnr, "FhirFix")
   pcall(vim.api.nvim_buf_del_user_command, bufnr, "FhirDisable")
   pcall(vim.api.nvim_del_augroup_by_name, "fhir.validate." .. bufnr)
   require("fhir.features.validate").clear(bufnr)
@@ -117,6 +127,10 @@ function M.detach(bufnr)
   local diag_key = config.get().keymaps.diagnostics
   if diag_key then
     pcall(vim.keymap.del, "n", diag_key, { buffer = bufnr })
+  end
+  local fix_key = config.get().keymaps.fix
+  if fix_key then
+    pcall(vim.keymap.del, "n", fix_key, { buffer = bufnr })
   end
   require("fhir.index").clear(bufnr)
 end
