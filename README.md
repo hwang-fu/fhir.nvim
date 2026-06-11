@@ -30,6 +30,14 @@ A searchable list of every resource in the document, each with a human-readable 
 
 `:FhirValidate` checks the whole document against the R4 definitions - structure (unknown elements, cardinality, types, primitive formats, choice elements) and constraint invariants - and puts every finding into `vim.diagnostic`: signs, virtual text, `]d` navigation. Severities follow the spec (a missing required element is an error; "should have narrative" is a warning). Attached buffers re-validate on save; `:FhirValidate!` clears the findings. Same engine, same graceful degradation when it's absent.
 
+### Work across the project
+
+References cross file boundaries: `:FhirGoto` follows `Patient/123` into the file that declares it, `:FhirUsages` lists referrers from the whole project, and `:FhirWorkspaceOutline` picks from every resource under your git root - files need not be open. `:FhirWorkspaceValidate` sweeps every document into the quickfix list at exact positions (errors by default; `all` includes advisories). Discovery is lazy and bounded; `:checkhealth fhir` shows what the workspace covers.
+
+### Fix findings
+
+`:FhirFix` repairs the structural finding under the cursor: remove an unknown element, insert a missing required element (cursor parked, ready to fill), rewrite a bare choice name to its typed form, fix array shape, drop an empty array. One undo step each, re-validated immediately.
+
 ## Requirements
 
 - Neovim **>= 0.10**
@@ -60,6 +68,9 @@ Open a FHIR `.json` / `.fhir.json` file; the plugin auto-attaches when the top-l
 | `:FhirOutline` | pick any resource and jump to it |
 | `:FhirEval [expr]` | evaluate a FHIRPath expression (prompts without args) |
 | `:FhirValidate[!]` | validate the document into diagnostics (`!` clears them) |
+| `:FhirFix` | repair the finding under the cursor |
+| `:FhirWorkspaceOutline` | pick any resource in the project and jump to it |
+| `:FhirWorkspaceValidate [all]` | validate every document into the quickfix list |
 | `:FhirEnable` / `:FhirDisable` | attach / detach the current buffer |
 
 No keymaps are set by default. Opt in through `setup()`:
@@ -72,6 +83,7 @@ require("fhir").setup({
     outline        = "<leader>fo",
     eval           = "<leader>fe",
     diagnostics    = "gl",   -- show the finding under the cursor in a float
+    fix            = "ga",   -- repair the finding under the cursor
   },
 })
 ```
@@ -81,10 +93,12 @@ require("fhir").setup({
 | Option | Default | Description |
 |---|---|---|
 | `detection` | `"auto"` | `"auto"` attaches FHIR JSON buffers automatically; `"manual"` requires `:FhirEnable`. |
-| `keymaps` | `{}` | Opt-in buffer-local maps: `goto_reference`, `find_usages`, `outline`, `eval`, `diagnostics`. |
+| `keymaps` | `{}` | Opt-in buffer-local maps: `goto_reference`, `find_usages`, `outline`, `eval`, `diagnostics`, `fix`. |
 | `native.dir` | unset | Explicit directory containing the `fhir_core` module; overrides the search below. |
 | `native.tag` | current release | Which engine release `:FhirFetchEngine` installs and the loader looks for. |
 | `validate.on_save` | `true` | Re-validate attached buffers after each write (needs the engine). |
+| `workspace.ignore` | `.git`, `node_modules`, ... | Directories skipped during workspace discovery (setting it replaces the list). |
+| `workspace.max_files` | `2000` | Scan bound for cross-file features; clipping is reported, never silent. |
 
 See `:help fhir` for the full reference.
 
@@ -92,7 +106,8 @@ See `:help fhir` for the full reference.
 
 - Targets **FHIR R4** (`4.0.1`).
 - Resolves relative, absolute-URL, `urn:uuid:`, and `contained` references. References by `identifier` and conditional references are **not** resolved.
-- Resolution is **single-buffer**; cross-file and live-server resolution are future work.
+- Resolution spans the buffer **and the workspace** - `*.json` under the enclosing git root (the cwd without one), lazily indexed and bounded by `workspace.max_files`. Live-server resolution is future work; ambiguous identities pick the first match and say so.
+- Quick fixes edit the **current buffer only**; multi-root workspaces and filesystem watchers are not supported (the index re-checks files on access).
 
 ## FHIRPath & validation engine (in development)
 
@@ -146,13 +161,15 @@ output, and the rate is a ratcheting floor in CI.
 
 ## Roadmap
 
-Shipped so far: navigation (pure Lua), FHIRPath evaluation, and validation
-diagnostics - the Rust engine reaching the editor through a native module
-with graceful degradation when it is absent. Ahead:
+Shipped so far: navigation, FHIRPath evaluation, validation diagnostics,
+workspace awareness (cross-file resolution, project-wide outline and
+validation), and quick fixes - the Rust engine reaching the editor through
+a native module with graceful degradation when it is absent. Ahead:
 
-- **Workspace awareness** - cross-file reference resolution and
-  workspace-wide validation.
-- **Quick fixes** - code actions for common findings.
+- **Live-server resolution** - references resolved against a running FHIR
+  server, behind the same resolver interface.
+- **Engine deepening** - schema-aware FHIRPath navigation and a higher
+  measured conformance rate.
 
 ## Development
 
