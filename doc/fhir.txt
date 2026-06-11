@@ -81,6 +81,9 @@ keymaps                         table (default {})
           find_usages      mapping for |:FhirUsages|
           outline          mapping for |:FhirOutline|
           eval             mapping for |:FhirEval| (opens the prompt)
+          diagnostics      show the finding under the cursor in a float
+                           (|vim.diagnostic.open_float()|; Neovim also maps
+                           CTRL-W_d to this globally)
 
         Example (a suggestion, not a default): >lua
             require("fhir").setup({
@@ -89,6 +92,7 @@ keymaps                         table (default {})
                 find_usages    = "gr",
                 outline        = "<leader>fo",
                 eval           = "<leader>fe",
+                diagnostics    = "gl",
               },
             })
 <
