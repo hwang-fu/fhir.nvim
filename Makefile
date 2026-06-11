@@ -19,7 +19,10 @@ SCHEMA_CACHE := $(SCRATCH)/r4-definitions
 SCHEMA_BASE  := https://hl7.org/fhir/R4
 SCHEMA_OUT   := crates/fhir-core/src/schema/generated.rs
 
-.PHONY: all test lint clean build schema
+CORPUS_DIR   := $(SCRATCH)/r4-examples
+CORPUS_URL   := $(SCHEMA_BASE)/examples-json.zip
+
+.PHONY: all test lint clean build schema corpus
 
 all: lint test
 
@@ -43,6 +46,14 @@ schema:
 	curl -fsSL -o $(SCHEMA_CACHE)/profiles-types.json $(SCHEMA_BASE)/profiles-types.json
 	curl -fsSL -o $(SCHEMA_CACHE)/profiles-resources.json $(SCHEMA_BASE)/profiles-resources.json
 	$(CARGO) run -p fhir-schema-gen -- $(SCHEMA_CACHE)/profiles-types.json $(SCHEMA_CACHE)/profiles-resources.json $(SCHEMA_OUT) "$(SCHEMA_BASE) definitions, fetched $$(date -u +%Y-%m-%d)"
+
+corpus:
+	test -f $(CORPUS_DIR)/.complete || ( \
+	  mkdir -p $(CORPUS_DIR) && \
+	  curl -fsSL -o $(CORPUS_DIR)/examples.zip $(CORPUS_URL) && \
+	  unzip -oq $(CORPUS_DIR)/examples.zip -d $(CORPUS_DIR) && \
+	  rm $(CORPUS_DIR)/examples.zip && \
+	  touch $(CORPUS_DIR)/.complete )
 
 clean:
 	rm -rf $(SCRATCH)
