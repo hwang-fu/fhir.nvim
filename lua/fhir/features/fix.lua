@@ -1,5 +1,6 @@
 local parse = require("fhir.parse")
 local pathmap = require("fhir.pathmap")
+local ui = require("fhir.ui")
 
 local M = {}
 
@@ -63,8 +64,8 @@ function M.fixes_for(buf, issue)
   end
   local node, key, exact = pathmap.node(root, buf, issue.path)
   local fixes = {}
-  local function add(title, apply)
-    fixes[#fixes + 1] = { title = title, apply = apply }
+  local function add(label, apply)
+    fixes[#fixes + 1] = { label = label, apply = apply }
   end
 
   if issue.category == "unknown" then
@@ -113,6 +114,43 @@ function M.fixes_for(buf, issue)
     end
   end
   return fixes
+end
+
+-- Offer the repairs for the findings on the cursor line: a single fix
+-- applies directly, several go through the picker. The re-validation
+-- afterwards is the confirmation.
+function M.run()
+  local buf = vim.api.nvim_get_current_buf()
+  local validate = require("fhir.features.validate")
+  local row = vim.api.nvim_win_get_cursor(0)[1] - 1
+  local diags = vim.diagnostic.get(buf, { namespace = validate.namespace, lnum = row })
+
+  local fixes = {}
+  for _, d in ipairs(diags) do
+    if d.user_data then
+      for _, f in ipairs(M.fixes_for(buf, d.user_data)) do
+        fixes[#fixes + 1] = f
+      end
+    end
+  end
+  if #fixes == 0 then
+    ui.notify("no applicable fix here", vim.log.levels.INFO)
+    return
+  end
+
+  local function apply(f)
+    f.apply()
+    validate.run()
+  end
+  if #fixes == 1 then
+    apply(fixes[1])
+    return
+  end
+  ui.select(fixes, { prompt = "FHIR fixes" }, function(choice)
+    if choice then
+      apply(choice)
+    end
+  end)
 end
 
 return M
