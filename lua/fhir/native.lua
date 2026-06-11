@@ -65,6 +65,19 @@ function M.eval(json, expr, resolver)
   return m.eval(json, expr, resolver)
 end
 
+--- Validate a resource's JSON text into an issue array (a JSON string).
+--- Returns the array string, or nil + message.
+function M.validate(json, resolver)
+  local m = load()
+  if not m then
+    return nil, "FHIRPath engine not available (run `make build`)"
+  end
+  if type(m.validate) ~= "function" then
+    return nil, "this engine release predates validation (update it with :FhirFetchEngine)"
+  end
+  return m.validate(json, resolver)
+end
+
 function M._reset()
   mod, failed = nil, nil
 end
