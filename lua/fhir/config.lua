@@ -5,7 +5,7 @@ local defaults = {
   keymaps = {},
   -- `tag` pins which engine release :FhirFetchEngine installs and the loader
   -- looks for; `dir` (unset by default) overrides the search path entirely.
-  native = { tag = "v3.0.0" },
+  native = { tag = "v4.0.0" },
   -- on_save re-validates attached buffers after every write (when the
   -- engine is present); :FhirValidate always works manually.
   validate = { on_save = true },
