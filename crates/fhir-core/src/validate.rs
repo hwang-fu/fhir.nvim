@@ -2,9 +2,11 @@
 //! cardinality, value types, primitive formats, and choice element use.
 
 use crate::error::Error;
+use crate::eval::{self, Ctx};
 use crate::schema::{self, Element, Severity, TypeDef};
+use crate::{parser, value, Resolve};
 use regex_lite::Regex;
-use serde_json::{Map, Value};
+use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::OnceLock;
 
@@ -23,6 +25,7 @@ pub enum Category {
     Type,
     Format,
     Choice,
+    Invariant,
 }
 
 fn issue(path: String, category: Category, message: String) -> Issue {
@@ -36,6 +39,10 @@ fn issue(path: String, category: Category, message: String) -> Issue {
 
 /// Validates a FHIR resource; Err means there was nothing to validate.
 pub fn validate(json: &str) -> Result<Vec<Issue>, Error> {
+    run(json, None)
+}
+
+pub(crate) fn run(json: &str, resolver: Option<&dyn Resolve>) -> Result<Vec<Issue>, Error> {
     let root: Value =
         serde_json::from_str(json).map_err(|e| Error::Validate(format!("bad json: {e}")))?;
     let obj = root
@@ -45,14 +52,15 @@ pub fn validate(json: &str) -> Result<Vec<Issue>, Error> {
         .get("resourceType")
         .and_then(Value::as_str)
         .ok_or_else(|| Error::Validate("resourceType is missing".into()))?;
+    let ctx = Ctx { resolver };
     let mut issues = Vec::new();
-    walk_typed(rt, obj, rt, &mut issues);
+    walk_typed(rt, &root, rt, &ctx, &mut issues);
     Ok(issues)
 }
 
-fn walk_typed(type_name: &str, obj: &Map<String, Value>, path: &str, issues: &mut Vec<Issue>) {
+fn walk_typed(type_name: &str, focus: &Value, path: &str, ctx: &Ctx, issues: &mut Vec<Issue>) {
     match schema::type_def(type_name) {
-        Some(ty) => walk_object(ty, "", obj, path, issues),
+        Some(ty) => walk_object(ty, "", focus, path, ctx, issues),
         None => issues.push(issue(
             path.to_string(),
             Category::Unknown,
@@ -61,13 +69,50 @@ fn walk_typed(type_name: &str, obj: &Map<String, Value>, path: &str, issues: &mu
     }
 }
 
+// constraints attach to the element they were declared on: the type root
+// (prefix ""), a backbone, or a contentReference target - evaluate them
+// with that instance as the focus
+fn check_invariants(
+    ty: &TypeDef,
+    prefix: &str,
+    focus: &Value,
+    path: &str,
+    ctx: &Ctx,
+    issues: &mut Vec<Issue>,
+) {
+    let mut input = None; // converted on the first matching constraint
+    for c in ty.constraints.iter().filter(|c| c.path == prefix) {
+        let Ok(expr) = parser::parse(c.expression) else {
+            continue;
+        };
+        let input = input.get_or_insert_with(|| value::from_json(focus));
+        let Ok(result) = eval::eval(&expr, input, ctx) else {
+            continue;
+        };
+        // only a positive false fails: an engine gap must not invent issues
+        if result == [crate::Value::Boolean(false)] {
+            issues.push(Issue {
+                path: path.to_string(),
+                severity: c.severity,
+                category: Category::Invariant,
+                message: format!("{}: {}", c.key, c.human),
+            });
+        }
+    }
+}
+
 fn walk_object(
     ty: &'static TypeDef,
     prefix: &str,
-    obj: &Map<String, Value>,
+    focus: &Value,
     path: &str,
+    ctx: &Ctx,
     issues: &mut Vec<Issue>,
 ) {
+    let Some(obj) = focus.as_object() else {
+        return; // callers report non-objects
+    };
+    check_invariants(ty, prefix, focus, path, ctx, issues);
     let mut present: HashSet<&'static str> = HashSet::new();
     let mut variants: BTreeMap<&'static str, Vec<&str>> = BTreeMap::new();
     for (key, value) in obj {
@@ -111,13 +156,13 @@ fn walk_object(
             }
             check_shape(el, value, &child_path, issues);
             if let Some(t) = el.types.first() {
-                walk_value(ty, &rel, t, value, &child_path, issues);
+                walk_value(ty, &rel, t, value, &child_path, ctx, issues);
             }
         } else if let Some((el, variant)) = resolve_choice(ty, prefix, key) {
             present.insert(el.path);
             variants.entry(el.path).or_default().push(key);
             check_shape(el, value, &child_path, issues);
-            walk_value(ty, el.path, variant, value, &child_path, issues);
+            walk_value(ty, el.path, variant, value, &child_path, ctx, issues);
         } else {
             issues.push(issue(
                 child_path,
@@ -186,15 +231,16 @@ fn walk_value(
     type_name: &str,
     value: &Value,
     path: &str,
+    ctx: &Ctx,
     issues: &mut Vec<Issue>,
 ) {
     match value.as_array() {
         Some(items) => {
             for (i, item) in items.iter().enumerate() {
-                walk_single(ty, rel, type_name, item, &format!("{path}[{i}]"), issues);
+                walk_single(ty, rel, type_name, item, &format!("{path}[{i}]"), ctx, issues);
             }
         }
-        None => walk_single(ty, rel, type_name, value, path, issues),
+        None => walk_single(ty, rel, type_name, value, path, ctx, issues),
     }
 }
 
@@ -204,6 +250,7 @@ fn walk_single(
     type_name: &str,
     value: &Value,
     path: &str,
+    ctx: &Ctx,
     issues: &mut Vec<Issue>,
 ) {
     if value.is_null() {
@@ -217,20 +264,24 @@ fn walk_single(
     // a contentReference points back into this type: re-anchor and descend
     if let Some(target) = type_name.strip_prefix('#') {
         let prefix = target.split_once('.').map_or("", |(_, rest)| rest);
-        match value.as_object() {
-            Some(obj) => walk_object(ty, prefix, obj, path, issues),
-            None => issues.push(expected_object(path)),
+        if value.is_object() {
+            walk_object(ty, prefix, value, path, ctx, issues);
+        } else {
+            issues.push(expected_object(path));
         }
         return;
     }
     match type_name {
-        "BackboneElement" | "Element" => match value.as_object() {
-            Some(obj) => walk_object(ty, rel, obj, path, issues),
-            None => issues.push(expected_object(path)),
-        },
+        "BackboneElement" | "Element" => {
+            if value.is_object() {
+                walk_object(ty, rel, value, path, ctx, issues);
+            } else {
+                issues.push(expected_object(path));
+            }
+        }
         "Resource" => match value.as_object() {
             Some(obj) => match obj.get("resourceType").and_then(Value::as_str) {
-                Some(rt) => walk_typed(rt, obj, path, issues),
+                Some(rt) => walk_typed(rt, value, path, ctx, issues),
                 None => issues.push(issue(
                     path.to_string(),
                     Category::Type,
@@ -247,9 +298,10 @@ fn walk_single(
                 check_primitive(name, value, path, issues);
                 return;
             }
-            match value.as_object() {
-                Some(obj) => walk_object(target, "", obj, path, issues),
-                None => issues.push(expected_object(path)),
+            if value.is_object() {
+                walk_object(target, "", value, path, ctx, issues);
+            } else {
+                issues.push(expected_object(path));
             }
         }
     }
@@ -568,5 +620,59 @@ mod tests {
                          "item":[{"linkId":"1.1","type":"string","blorb":true}]}]}"#,
         );
         assert_eq!(paths(&issues), ["Questionnaire.item[0].item[0].blorb"]);
+    }
+
+    #[test]
+    fn failing_invariants_are_reported() {
+        // bdl-1: total only belongs on search/history bundles
+        let issues =
+            validate(r#"{"resourceType":"Bundle","type":"collection","total":1}"#).unwrap();
+        assert_eq!(paths(&issues), ["Bundle"]);
+        let i = &issues[0];
+        assert_eq!(i.category, Category::Invariant);
+        assert_eq!(i.severity, Severity::Error);
+        assert!(i.message.starts_with("bdl-1:"), "got: {}", i.message);
+    }
+
+    #[test]
+    fn datatype_instances_run_their_invariants() {
+        // qty-3: a coded quantity needs a system
+        let issues = errors(
+            r#"{"resourceType":"Observation","status":"final","code":{"text":"BP"},
+                "valueQuantity":{"value":1,"code":"kg"}}"#,
+        );
+        assert_eq!(paths(&issues), ["Observation.valueQuantity"]);
+        assert!(issues[0].message.starts_with("qty-3:"));
+    }
+
+    #[test]
+    fn backbone_invariants_run_with_the_backbone_as_focus() {
+        // pat-1: a contact needs name, telecom, address, or organization
+        let issues = errors(r#"{"resourceType":"Patient","contact":[{"gender":"male"}]}"#);
+        assert_eq!(paths(&issues), ["Patient.contact[0]"]);
+        assert!(issues[0].message.starts_with("pat-1:"));
+    }
+
+    #[test]
+    fn invariant_severities_map_through() {
+        // dom-6: a resource should have narrative - advisory, not an error
+        let all = validate(r#"{"resourceType":"Patient"}"#).unwrap();
+        let dom6 = all.iter().find(|i| i.message.starts_with("dom-6:")).unwrap();
+        assert_eq!(dom6.severity, Severity::Warning);
+        assert_eq!(dom6.category, Category::Invariant);
+        assert_eq!(dom6.path, "Patient");
+        // the error view of the same document is clean
+        assert_eq!(errors(r#"{"resourceType":"Patient"}"#), vec![]);
+    }
+
+    #[test]
+    fn unrunnable_expressions_never_invent_issues() {
+        // dom-3 (%resource) and ele-1 (hasValue()) are beyond the engine; they
+        // must skip silently, so a valid contained resource stays quiet
+        let issues = errors(
+            r#"{"resourceType":"Patient",
+                "contained":[{"resourceType":"Organization","name":"Acme"}]}"#,
+        );
+        assert_eq!(issues, vec![]);
     }
 }
