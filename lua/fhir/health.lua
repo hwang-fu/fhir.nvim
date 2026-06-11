@@ -29,6 +29,18 @@ function M.check()
       ":FhirEval is unavailable without it; navigation works regardless.",
     })
   end
+
+  local workspace = require("fhir.workspace")
+  local file = vim.api.nvim_buf_get_name(0)
+  local root = workspace.root(file ~= "" and file or vim.uv.cwd())
+  local files, clipped = workspace.files(root)
+  vim.health.info(
+    ("workspace root %s: %d json candidates%s"):format(
+      root,
+      #files,
+      clipped and " (clipped - raise workspace.max_files)" or ""
+    )
+  )
 end
 
 return M
