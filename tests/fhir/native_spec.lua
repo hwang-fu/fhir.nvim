@@ -25,6 +25,33 @@ describe("fhir_core native module", function()
     assert.is_string(err)
   end)
 
+  it("validates a resource and returns an issue array", function()
+    if not ok then
+      print("SKIP: native module not built (run `make build`)")
+      return
+    end
+    local result, err = fhir_core.validate('{"resourceType":"Patient","favouriteColor":"blue"}')
+    assert.is_nil(err)
+    local found
+    for _, issue in ipairs(vim.json.decode(result)) do
+      if issue.category == "unknown" then
+        found = issue
+      end
+    end
+    assert.are.same("Patient.favouriteColor", found.path)
+    assert.are.same("error", found.severity)
+  end)
+
+  it("validate returns nil and a message on non-resources", function()
+    if not ok then
+      print("SKIP: native module not built (run `make build`)")
+      return
+    end
+    local result, err = fhir_core.validate("{")
+    assert.is_nil(result)
+    assert.is_string(err)
+  end)
+
   it("resolve() reaches back into lua", function()
     if not ok then
       print("SKIP: native module not built (run `make build`)")
