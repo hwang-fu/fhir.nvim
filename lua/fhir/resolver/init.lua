@@ -1,8 +1,9 @@
 local M = {}
 
--- The active resolver. v1 ships LocalBufferResolver; v4 (workspace) / v5 (server)
--- swap this out behind the same resolve(occ, idx) -> Location? interface.
-local active = require("fhir.resolver.local_buffer")
+-- The active resolver, behind the same resolve(occ, idx) -> Location?
+-- interface: v1 shipped LocalBufferResolver, v4 wraps it with workspace
+-- fall-through; v5 (server) swaps in the same way.
+local active = require("fhir.resolver.workspace")
 
 function M.resolve(occ, idx)
   return active.resolve(occ, idx)
