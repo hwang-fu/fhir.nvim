@@ -79,6 +79,12 @@ function M.attach(bufnr)
       require("fhir.features.eval").run()
     end, { buffer = bufnr, desc = "fhir: evaluate fhirpath" })
   end
+  local diag_key = config.get().keymaps.diagnostics
+  if diag_key then
+    vim.keymap.set("n", diag_key, function()
+      vim.diagnostic.open_float()
+    end, { buffer = bufnr, desc = "fhir: finding details" })
+  end
 end
 
 -- Tear down: remove commands/keymaps, clear state, drop the cached index.
@@ -107,6 +113,10 @@ function M.detach(bufnr)
   local eval_key = config.get().keymaps.eval
   if eval_key then
     pcall(vim.keymap.del, "n", eval_key, { buffer = bufnr })
+  end
+  local diag_key = config.get().keymaps.diagnostics
+  if diag_key then
+    pcall(vim.keymap.del, "n", diag_key, { buffer = bufnr })
   end
   require("fhir.index").clear(bufnr)
 end
