@@ -33,6 +33,16 @@ describe("pathmap", function()
     assert.are.same(3, r2[1]) -- "James"
   end)
 
+  it("exposes the resolved node for editing", function()
+    local buf, res = fixture()
+    local node, key, exact = pathmap.node(res.node, buf, "Patient.contact[0].gender")
+    assert.is_true(exact)
+    assert.is_not_nil(key) -- the "gender" key node
+    assert.are.equal("string", node:type()) -- the value node ("male")
+    local _, _, missing = pathmap.node(res.node, buf, "Patient.contact[0].nothing")
+    assert.is_false(missing)
+  end)
+
   it("falls back to the deepest resolvable ancestor", function()
     local buf, res = fixture()
     -- a missing required child lands on its parent
