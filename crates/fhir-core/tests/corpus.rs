@@ -22,29 +22,33 @@ const SUPPRESSED_INVARIANTS: &[(&str, &str)] = &[
     ),
 ];
 
-/// Example files (by stem) that are known-imperfect upstream, with reasons.
-const KNOWN_EXCEPTIONS: &[(&str, &str)] = &[
+/// Example files (by stem) that are known-imperfect upstream. The middle
+/// field is the message fragment naming the ONE finding each file is
+/// forgiven; anything else in these files still fails the ratchet.
+const KNOWN_EXCEPTIONS: &[(&str, &str, &str)] = &[
     // logical-model examples: abstract is false yet baseDefinition is absent
-    ("definition", "violates sdf-4 upstream"),
-    ("event", "violates sdf-4 upstream"),
-    ("fivews", "violates sdf-4 upstream"),
-    ("request", "violates sdf-4 upstream"),
+    ("definition", "sdf-4:", "violates sdf-4 upstream"),
+    ("event", "sdf-4:", "violates sdf-4 upstream"),
+    ("fivews", "sdf-4:", "violates sdf-4 upstream"),
+    ("request", "sdf-4:", "violates sdf-4 upstream"),
     // definitional search parameter examples lack the required base element
-    ("codesystem-extensions-CodeSystem-author", "no base"),
-    ("codesystem-extensions-CodeSystem-effective", "no base"),
-    ("codesystem-extensions-CodeSystem-end", "no base"),
-    ("codesystem-extensions-CodeSystem-keyword", "no base"),
-    ("codesystem-extensions-CodeSystem-workflow", "no base"),
-    ("valueset-extensions-ValueSet-author", "no base"),
-    ("valueset-extensions-ValueSet-effective", "no base"),
-    ("valueset-extensions-ValueSet-end", "no base"),
-    ("valueset-extensions-ValueSet-keyword", "no base"),
-    ("valueset-extensions-ValueSet-workflow", "no base"),
+    ("codesystem-extensions-CodeSystem-author", "\"base\" is missing", "no base"),
+    ("codesystem-extensions-CodeSystem-effective", "\"base\" is missing", "no base"),
+    ("codesystem-extensions-CodeSystem-end", "\"base\" is missing", "no base"),
+    ("codesystem-extensions-CodeSystem-keyword", "\"base\" is missing", "no base"),
+    ("codesystem-extensions-CodeSystem-workflow", "\"base\" is missing", "no base"),
+    ("valueset-extensions-ValueSet-author", "\"base\" is missing", "no base"),
+    ("valueset-extensions-ValueSet-effective", "\"base\" is missing", "no base"),
+    ("valueset-extensions-ValueSet-end", "\"base\" is missing", "no base"),
+    ("valueset-extensions-ValueSet-keyword", "\"base\" is missing", "no base"),
+    ("valueset-extensions-ValueSet-workflow", "\"base\" is missing", "no base"),
 ];
 
-/// Whole families of known-imperfect generated examples, by stem suffix.
-const KNOWN_EXCEPTION_SUFFIXES: &[(&str, &str)] = &[(
+/// Whole families of known-imperfect generated examples, by stem suffix,
+/// each forgiven exactly the finding its fragment names.
+const KNOWN_EXCEPTION_SUFFIXES: &[(&str, &str, &str)] = &[(
     "-questionnaire",
+    "\"linkId\" is missing",
     "the spec's generated questionnaire forms omit linkId on display items",
 )];
 
@@ -64,6 +68,7 @@ fn r4_examples_validate_cleanly() {
     let mut by_category: BTreeMap<String, usize> = BTreeMap::new();
     let mut by_invariant: BTreeMap<String, usize> = BTreeMap::new();
     let mut samples: BTreeMap<String, String> = BTreeMap::new();
+    let mut forgiven: BTreeMap<&str, usize> = BTreeMap::new();
 
     let mut files: Vec<_> = fs::read_dir(&dir)
         .unwrap()
@@ -91,6 +96,20 @@ fn r4_examples_validate_cleanly() {
             {
                 continue;
             }
+            // a documented upstream imperfection: forgiven by finding, not
+            // by file - anything else in these files still counts
+            let pardon = KNOWN_EXCEPTIONS
+                .iter()
+                .find(|(s, frag, _)| *s == stem && i.message.contains(frag))
+                .or_else(|| {
+                    KNOWN_EXCEPTION_SUFFIXES
+                        .iter()
+                        .find(|(s, frag, _)| stem.ends_with(s) && i.message.contains(frag))
+                });
+            if let Some((_, frag, _)) = pardon {
+                *forgiven.entry(frag).or_insert(0) += 1;
+                continue;
+            }
             failed = true;
             let bucket = if i.category == fhir_core::Category::Invariant {
                 by_invariant.entry(key.clone()).or_insert(0)
@@ -103,9 +122,7 @@ fn r4_examples_validate_cleanly() {
                 .entry(label)
                 .or_insert_with(|| format!("{stem}: {} - {}", i.path, i.message));
         }
-        let excepted = KNOWN_EXCEPTIONS.iter().any(|(s, _)| *s == stem)
-            || KNOWN_EXCEPTION_SUFFIXES.iter().any(|(s, _)| stem.ends_with(s));
-        if !failed || excepted {
+        if !failed {
             clean += 1;
         }
     }
@@ -117,6 +134,7 @@ fn r4_examples_validate_cleanly() {
     );
     eprintln!("error issues by category: {by_category:?}");
     eprintln!("error issues by invariant: {by_invariant:?}");
+    eprintln!("forgiven findings: {forgiven:?}");
     for (label, sample) in &samples {
         eprintln!("  sample [{label}] {sample}");
     }
