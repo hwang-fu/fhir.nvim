@@ -82,11 +82,11 @@ fn check_invariants(
 ) {
     let mut input = None; // converted on the first matching constraint
     for c in ty.constraints.iter().filter(|c| c.path == prefix) {
-        let Ok(expr) = parser::parse(c.expression) else {
+        let Some(expr) = parsed(c.expression) else {
             continue;
         };
         let input = input.get_or_insert_with(|| value::from_json(focus));
-        let Ok(result) = eval::eval(&expr, input, ctx) else {
+        let Ok(result) = eval::eval(expr, input, ctx) else {
             continue;
         };
         // only a positive false fails: an engine gap must not invent issues
@@ -353,6 +353,25 @@ fn check_primitive(name: &str, value: &Value, path: &str, issues: &mut Vec<Issue
             }
         },
     }
+}
+
+// every distinct constraint expression parses once per process
+fn parsed(expression: &'static str) -> Option<&'static crate::ast::Expr> {
+    static CACHE: OnceLock<HashMap<&'static str, Option<crate::ast::Expr>>> = OnceLock::new();
+    CACHE
+        .get_or_init(|| {
+            let mut cache: HashMap<&'static str, Option<crate::ast::Expr>> = HashMap::new();
+            for ty in schema::TYPES {
+                for c in ty.constraints {
+                    cache
+                        .entry(c.expression)
+                        .or_insert_with(|| parser::parse(c.expression).ok());
+                }
+            }
+            cache
+        })
+        .get(expression)
+        .and_then(|e| e.as_ref())
 }
 
 // the declared format regexes, anchored and compiled once
