@@ -72,6 +72,17 @@ describe("validate feature", function()
     assert.are.equal("function", type(fake_native.seen.resolver))
   end)
 
+  it("diagnostics carry their issue for downstream consumers", function()
+    feature.run()
+    local diags = vim.diagnostic.get(buf)
+    assert.are.equal(2, #diags) -- not vacuously true
+    for _, d in ipairs(diags) do
+      assert.is_string(d.user_data.path)
+      assert.is_string(d.user_data.category)
+      assert.is_string(d.user_data.message)
+    end
+  end)
+
   it("clear() empties the namespace", function()
     feature.run()
     assert.are.equal(2, #vim.diagnostic.get(buf))
