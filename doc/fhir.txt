@@ -84,6 +84,7 @@ keymaps                         table (default {})
           diagnostics      show the finding under the cursor in a float
                            (|vim.diagnostic.open_float()|; Neovim also maps
                            CTRL-W_d to this globally)
+          fix              mapping for |:FhirFix|
 
         Example (a suggestion, not a default): >lua
             require("fhir").setup({
@@ -93,6 +94,7 @@ keymaps                         table (default {})
                 outline        = "<leader>fo",
                 eval           = "<leader>fe",
                 diagnostics    = "gl",
+                fix            = "ga",
               },
             })
 <
@@ -115,6 +117,17 @@ validate                        table
                     after every write, publishing the findings to
                     |vim.diagnostic|. Quietly does nothing when the engine
                     is absent.
+
+                                                          *fhir-opt-workspace*
+workspace                       table
+        Cross-file features look for `*.json` under the buffer's git root
+        (the current directory when there is none).
+          ignore      directories skipped during discovery (default:
+                      `.git`, `node_modules`, `target`, `.tests`).
+                      Setting this replaces the whole list.
+          max_files   scan bound (default 2000). Above it the workspace
+                      is clipped and a notice says so; |:checkhealth|
+                      `fhir` reports the root and the candidate count.
 ==============================================================================
 5. Commands                                                  *fhir-commands*
 
@@ -149,6 +162,29 @@ The feature commands are buffer-local: they exist only in attached buffers.
         element with its declared severity. With [!], clears the findings
         instead. Requires the native engine (see |fhir-requirements|);
         without it a notice explains how to get it.
+
+:FhirFix                                                          *:FhirFix*
+        Offer repairs for the findings on the cursor line: remove an
+        unknown element, insert a missing required element (an empty
+        skeleton, cursor parked and ready to fill), rewrite a bare choice
+        name to its typed form, fix array shape, drop an empty array. A
+        single applicable repair applies immediately; several open a
+        picker. The buffer re-validates after applying; `u` undoes one
+        repair.
+
+:FhirWorkspaceOutline                                *:FhirWorkspaceOutline*
+        Pick from every resource in the workspace and jump to it - files
+        need not be open. Labels follow the buffer outline's heuristic.
+        See |fhir-opt-workspace| for what the workspace covers. This is a
+        global command.
+
+:FhirWorkspaceValidate [all]                        *:FhirWorkspaceValidate*
+        Validate every FHIR document under the workspace root and collect
+        the findings into the |quickfix| list at their exact elements.
+        Error findings only by default; `all` includes warnings and
+        informational findings (the summary always counts everything).
+        Open attached buffers refresh their diagnostics too. Requires the
+        native engine. This is a global command.
 
 :FhirEnable                                                      *:FhirEnable*
         Attach fhir.nvim to the current buffer. Useful when `detection` is
@@ -211,6 +247,22 @@ Validation ~
         guessed. Attached buffers re-validate on every write by default
         (|fhir-opt-validate|).
 
+Workspace awareness ~
+        References resolve across files: |:FhirGoto| follows `Patient/123`
+        into the file that declares it (ambiguous identities pick the
+        first match and say so), |:FhirUsages| lists referrers from the
+        whole project, and |:FhirWorkspaceOutline| spans every document.
+        Discovery is lazy and bounded (|fhir-opt-workspace|); unopened
+        files are indexed without being loaded, and the index re-checks
+        changed files on access. FHIRPath `resolve()` and validation
+        invariants reach workspace targets through the same machinery.
+
+Quick fixes ~
+        |:FhirFix| repairs the structural finding under the cursor; see
+        the command for the catalog. Each repair is a single undo step,
+        and the buffer re-validates immediately - the refreshed
+        diagnostics are the confirmation.
+
 ==============================================================================
 7. Health                                                      *fhir-health*
 
@@ -222,8 +274,10 @@ parser, the picker, and the FHIRPath engine.
 
 - Target is FHIR R4 (`4.0.1`).
 - References by `identifier` and conditional references are not resolved.
-- Resolution is single-buffer; cross-file (workspace) and live-server
-  resolution are not supported.
+- Resolution spans the buffer and the workspace (`*.json` under the
+  enclosing git root, bounded by |fhir-opt-workspace|); live-server
+  resolution is not supported. Quick fixes edit the current buffer only;
+  multi-root workspaces and filesystem watchers are out of scope.
 - FHIRPath coverage is a measured subset (no unit conversion, %variables,
   or type reflection); the README publishes the conformance rate.
 - Validation targets R4 structure and invariants; profiles, slicing, and
