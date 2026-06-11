@@ -6,9 +6,12 @@ mod lexer;
 mod parser;
 mod schema;
 mod temporal;
+mod validate;
 mod value;
 
 pub use error::Error;
+pub use schema::Severity;
+pub use validate::{Category, Issue, validate};
 pub use value::Value;
 
 pub fn evaluate(resource_json: &str, expression: &str) -> Result<Vec<Value>, Error> {

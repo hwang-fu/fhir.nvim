@@ -8,6 +8,8 @@ pub struct TypeModel {
     pub kind: String,
     pub elements: Vec<ElementModel>,
     pub constraints: Vec<ConstraintModel>,
+    /// For primitive types: the value format regex their definition declares.
+    pub pattern: Option<String>,
 }
 
 pub struct ElementModel {
@@ -59,6 +61,7 @@ pub fn parse_structure_definition(sd: &Value) -> Option<TypeModel> {
     let prefix = format!("{name}.");
     let mut elements = Vec::new();
     let mut constraints = Vec::new();
+    let mut pattern = None;
     for (i, el) in rows.iter().enumerate() {
         let full = el.get("path")?.as_str()?;
         let rel = if i == 0 {
@@ -71,6 +74,9 @@ pub fn parse_structure_definition(sd: &Value) -> Option<TypeModel> {
             None => (rel, false),
         };
 
+        if kind == "primitive-type" && rel == "value" && pattern.is_none() {
+            pattern = regex_of(el);
+        }
         if let Some(cs) = el.get("constraint").and_then(Value::as_array) {
             for c in cs {
                 let get = |k: &str| c.get(k).and_then(Value::as_str).unwrap_or("").to_string();
@@ -109,7 +115,21 @@ pub fn parse_structure_definition(sd: &Value) -> Option<TypeModel> {
         kind,
         elements,
         constraints,
+        pattern,
     })
+}
+
+// primitive value elements declare their format as a regex extension
+fn regex_of(el: &Value) -> Option<String> {
+    let exts = el.get("type")?.get(0)?.get("extension")?.as_array()?;
+    exts.iter()
+        .find(|e| {
+            e.get("url").and_then(Value::as_str)
+                == Some("http://hl7.org/fhir/StructureDefinition/regex")
+        })?
+        .get("valueString")
+        .and_then(Value::as_str)
+        .map(String::from)
 }
 
 #[cfg(test)]
@@ -157,6 +177,25 @@ mod tests {
         assert_eq!(ty.constraints.len(), 1);
         assert_eq!(ty.constraints[0].key, "dem-1");
         assert_eq!(ty.constraints[0].path, ""); // root-level constraint
+
+        assert!(ty.pattern.is_none()); // not a primitive
+    }
+
+    #[test]
+    fn lifts_primitive_regex_patterns() {
+        let sd: serde_json::Value = serde_json::from_str(
+            r#"{"resourceType":"StructureDefinition","name":"date","kind":"primitive-type","type":"date",
+                "snapshot":{"element":[
+                  {"path":"date","min":0,"max":"*"},
+                  {"path":"date.value","min":0,"max":"1","type":[{
+                    "extension":[{"url":"http://hl7.org/fhir/StructureDefinition/regex",
+                                  "valueString":"([1-9][0-9]{3})(-(0[1-9]|1[0-2]))?"}],
+                    "code":"http://hl7.org/fhirpath/System.Date"}]}
+                ]}}"#,
+        )
+        .unwrap();
+        let ty = parse_structure_definition(&sd).unwrap();
+        assert_eq!(ty.pattern.as_deref(), Some("([1-9][0-9]{3})(-(0[1-9]|1[0-2]))?"));
     }
 
     #[test]
